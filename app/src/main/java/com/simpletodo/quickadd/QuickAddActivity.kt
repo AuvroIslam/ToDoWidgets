@@ -67,6 +67,7 @@ import com.simpletodo.AppGraph
 import com.simpletodo.data.TodoList
 import com.simpletodo.ui.theme.SimpleTodoTheme
 import com.simpletodo.ui.theme.TodoAccents
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -116,6 +117,9 @@ class QuickAddActivity : ComponentActivity() {
                             if (id != null) {
                                 addedCount += 1
                                 lastAdded = text.trim()
+                                // Let the user see the confirmation flash, then close the sheet.
+                                delay(600)
+                                finish()
                             }
                         }
                     },

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!--
+        The amber the logo is drawn on, sampled from MainLogo.png. It is the adaptive icon's
+        background *layer* rather than part of the foreground image, so the launcher can mask,
+        shadow and parallax it the way it does every other icon.
+    -->
+    <color name="ic_launcher_background">#FCBA15</color>
     <color name="window_background">#FFFFFF</color>
 </resources>

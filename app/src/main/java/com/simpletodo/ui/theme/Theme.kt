@@ -8,7 +8,12 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.simpletodo.AppGraph
+import com.simpletodo.data.ThemeMode
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
@@ -156,9 +161,26 @@ private val TodoShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
+/**
+ * The dark/light decision for the whole app: the user's stored choice, falling back to the system
+ * setting when they have not made one.
+ *
+ * Read here rather than threaded down from each activity, so the quick-add sheet and the widget
+ * configuration screen honour the preference too without either of them having to know about it.
+ */
+@Composable
+fun rememberIsDarkTheme(): Boolean {
+    val mode by AppGraph.get(LocalContext.current).theme.mode.collectAsState()
+    return when (mode) {
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    }
+}
+
 @Composable
 fun SimpleTodoTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = rememberIsDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(

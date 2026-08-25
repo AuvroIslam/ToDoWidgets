@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import com.simpletodo.data.TodoRepository
 import com.simpletodo.data.TodoSnapshot
 import com.simpletodo.data.TodoStore
+import com.simpletodo.data.ThemePreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +22,7 @@ class AppContainer(context: Context) {
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val store: DataStore<TodoSnapshot> = TodoStore.create(applicationContext, appScope)
     val repository: TodoRepository = TodoRepository(store)
+    val theme: ThemePreference = ThemePreference(applicationContext)
 }
 
 object AppGraph {

@@ -20,6 +20,7 @@ import com.simpletodo.ui.theme.TodoDarkColors
 import com.simpletodo.ui.theme.TodoLightColors
 import com.simpletodo.data.Task
 import com.simpletodo.data.TodoList
+import com.simpletodo.data.TodoRepository
 import com.simpletodo.data.TodoSnapshot
 
 private const val TAG = "TodoWidget"
@@ -91,9 +92,12 @@ abstract class TodoWidget(val kind: WidgetKind) : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = resolveAppWidgetId(context, id)
         val repository = AppGraph.repository(context)
+
         claimPinHintIfUnbound(context, repository, appWidgetId)
 
         provideContent {
+            // Collected inside the composition, so a write from this widget re-renders it
+            // immediately rather than waiting for the round trip back through WidgetSync.
             val snapshot by repository.snapshot.collectAsState(initial = null)
             GlanceTheme(colors = WidgetColors) {
                 TodoWidgetBody(
@@ -149,7 +153,7 @@ abstract class TodoWidget(val kind: WidgetKind) : GlanceAppWidget() {
      */
     private suspend fun claimPinHintIfUnbound(
         context: Context,
-        repository: com.simpletodo.data.TodoRepository,
+        repository: TodoRepository,
         appWidgetId: Int,
     ) {
         if (!isRealWidget(appWidgetId)) return

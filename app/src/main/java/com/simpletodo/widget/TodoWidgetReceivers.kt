@@ -8,24 +8,37 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.updateAll
 import com.simpletodo.AppGraph
+import kotlinx.coroutines.launch
 
 private const val TAG = "TodoWidgetReceivers"
 
-class SmallTodoWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = SmallTodoWidget()
+/**
+ * Base receiver that nudges Glance to render as soon as the first widget of this size is enabled.
+ * Some Samsung/One UI launchers do not send a follow-up APPWIDGET_UPDATE after the picker places
+ * the widget, so the first composition can sit on the loading placeholder until something else
+ * pokes it. Pushing one update from onEnabled covers that gap.
+ */
+abstract class TodoWidgetReceiver(private val kind: WidgetKind) : GlanceAppWidgetReceiver() {
+
+    override val glanceAppWidget: GlanceAppWidget = widgetFor(kind)
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        val appContext = context.applicationContext
+        AppGraph.get(appContext).appScope.launch {
+            runCatching { widgetFor(kind).updateAll(appContext) }
+                .onFailure { Log.w(TAG, "onEnabled update failed for $kind", it) }
+        }
+    }
 }
 
-class MediumTodoWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = MediumTodoWidget()
-}
+class SmallTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.SMALL)
 
-class LargeTodoWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = LargeTodoWidget()
-}
+class MediumTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.MEDIUM)
 
-class XLargeTodoWidgetReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = XLargeTodoWidget()
-}
+class LargeTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.LARGE)
+
+class XLargeTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.XLARGE)
 
 /**
  * Pushes the current state to every widget instance.

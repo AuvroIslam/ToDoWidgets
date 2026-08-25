@@ -29,8 +29,10 @@ android {
         applicationId = "com.auvro.todowidget"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // 1 is already published. Play refuses a second upload at the same code, so any build
+        // that is meant to replace it has to move past it.
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -116,6 +118,10 @@ dependencies {
     implementation(libs.androidx.glance.material3)
 
     implementation(libs.androidx.datastore)
+    // The widgets' per-instance state (pending delete, show-completed) is a Preferences DataStore,
+    // which Glance happens to pull in as well. Declared here because the widget code imports it
+    // directly, rather than relying on Glance's transitive copy staying put.
+    implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

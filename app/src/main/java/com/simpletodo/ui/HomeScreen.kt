@@ -33,13 +33,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Widgets
@@ -93,6 +96,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.simpletodo.R
 import com.simpletodo.data.Task
+import com.simpletodo.data.ThemeMode
 import com.simpletodo.data.TodoLimits
 import com.simpletodo.data.TodoList
 import com.simpletodo.data.TodoSnapshot
@@ -119,6 +123,8 @@ fun HomeScreen(
     snackbarHostState: SnackbarHostState,
     onNewList: () -> Unit,
     onAddWidget: (String) -> Unit,
+    themeMode: ThemeMode,
+    onTheme: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lists = snapshot.lists
@@ -195,6 +201,8 @@ fun HomeScreen(
                 onAddWidget = { selected?.let { onAddWidget(it.id) } },
                 onClearCompleted = { selected?.let { viewModel.clearCompleted(it.id) } },
                 onDeleteList = { confirmDeleteList = true },
+                themeMode = themeMode,
+                onTheme = onTheme,
                 hasCompleted = completed.isNotEmpty(),
             )
         },
@@ -397,6 +405,8 @@ private fun HomeHeader(
     onAddWidget: () -> Unit,
     onClearCompleted: () -> Unit,
     onDeleteList: () -> Unit,
+    themeMode: ThemeMode,
+    onTheme: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -412,10 +422,18 @@ private fun HomeHeader(
                 .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // No badge behind it: the page is the same white the launcher icon sits on, so the cat
-            // reads as the mark itself rather than as a sticker pasted onto the header.
+            // On a light theme no badge behind it: the page is the same white the launcher icon
+            // sits on, so the cat reads as the mark itself rather than as a sticker pasted onto
+            // the header. On a dark theme that would be a black cat on a near-black page, so it
+            // gets the brand pastel back as a disc to sit on — the same amber the widget's header
+            // band uses, which keeps the two marks recognisably the same one.
+            // The launcher icon's round form, reused verbatim: the mark in the app bar and the
+            // mark on the home screen are then literally the same image on the same amber, which
+            // is what makes the app recognisable as the thing the user tapped. It carries its own
+            // ground, so it needs no help from the theme -- and the cat is centred on its *head*
+            // rather than its outline, since the tail would otherwise pull the face off-axis.
             Image(
-                painter = painterResource(R.drawable.cat_badge),
+                painter = painterResource(R.drawable.app_logo),
                 contentDescription = null,
                 modifier = Modifier.size(32.dp),
                 contentScale = ContentScale.Fit,
@@ -465,6 +483,29 @@ private fun HomeHeader(
                         text = { Text("New list") },
                         leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
                         onClick = { menuOpen = false; onNewList() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Theme") },
+                        // The icon is the current mode, so the setting can be read off the menu
+                        // without opening the dialog to find out what it is.
+                        leadingIcon = {
+                            Icon(
+                                imageVector = when (themeMode) {
+                                    ThemeMode.LIGHT -> Icons.Rounded.LightMode
+                                    ThemeMode.DARK -> Icons.Rounded.DarkMode
+                                    ThemeMode.SYSTEM -> Icons.Rounded.BrightnessAuto
+                                },
+                                contentDescription = null,
+                            )
+                        },
+                        trailingIcon = {
+                            Text(
+                                text = themeMode.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                        onClick = { menuOpen = false; onTheme() },
                     )
                 }
             }

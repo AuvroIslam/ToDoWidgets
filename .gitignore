@@ -15,3 +15,13 @@ keystore.properties
 *.jks
 *.keystore
 
+# Local working files. AppLogo.png is a superseded draft of the mark (MainLogo.png is the one
+# the icons are generated from), and PLAYSTORE_RELEASE.md is scratch release notes rather than
+# project documentation -- the README covers what a reader actually needs.
+AppLogo.png
+PLAYSTORE_RELEASE.md
+
+# Assistant scratch files. Never part of the project.
+CLAUDE.md
+.claude/
+

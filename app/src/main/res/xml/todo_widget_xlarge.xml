@@ -9,7 +9,7 @@
     android:maxResizeWidth="860dp"
     android:maxResizeHeight="980dp"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:previewImage="@drawable/widget_shot_xlarge"
     android:description="@string/widget_xlarge_description"

@@ -1,6 +1,7 @@
 package com.simpletodo.widget
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
@@ -55,6 +56,8 @@ import com.simpletodo.quickadd.QuickAddActivity
 import com.simpletodo.ui.MainActivity
 import com.simpletodo.ui.theme.TodoAccents
 
+private const val TAG = "WidgetContent"
+
 /** Stable handles for instrumentation. */
 object WidgetTags {
     const val TITLE = "widget_title"
@@ -65,7 +68,6 @@ object WidgetTags {
     const val NO_LISTS = "widget_no_lists"
     const val LIST_DELETED = "widget_list_deleted"
     const val CHANGE_LIST = "widget_change_list"
-    const val OVERFLOW = "widget_overflow"
     const val FOOTER = "widget_footer"
     const val SHOW_COMPLETED = "widget_show_completed"
     const val CLEAR_COMPLETED = "widget_clear_completed"
@@ -101,9 +103,9 @@ fun TodoWidgetBody(
         val padded = GlanceModifier.fillMaxSize().padding(spec.outerPadding)
         when (state) {
             WidgetUiState.Loading -> Box(padded) { LoadingState() }
-            WidgetUiState.NoLists -> Box(padded) { NoListsState(kind, appWidgetId, spec, interactive) }
+            WidgetUiState.NoLists -> Box(padded) { NoListsState(spec, interactive) }
             WidgetUiState.ListDeleted -> Box(padded) {
-                ListDeletedState(kind, appWidgetId, spec, interactive)
+                ListDeletedState(appWidgetId, spec, interactive)
             }
 
             is WidgetUiState.Ready -> ReadyState(
@@ -124,6 +126,7 @@ fun TodoWidgetBody(
 
 @Composable
 private fun LoadingState() {
+    Log.d(TAG, "Rendering widget Loading state")
     Box(
         modifier = GlanceModifier.fillMaxSize().semantics { testTag = WidgetTags.LOADING },
         contentAlignment = Alignment.Center,
@@ -137,8 +140,6 @@ private fun LoadingState() {
 
 @Composable
 private fun NoListsState(
-    kind: WidgetKind,
-    appWidgetId: Int,
     spec: WidgetSpec,
     interactive: Boolean,
 ) {
@@ -157,7 +158,6 @@ private fun NoListsState(
 
 @Composable
 private fun ListDeletedState(
-    kind: WidgetKind,
     appWidgetId: Int,
     spec: WidgetSpec,
     interactive: Boolean,
@@ -258,9 +258,6 @@ private fun ReadyState(
                 spec = spec,
                 doneCount = completed.size,
                 accentIndex = list.accent,
-                interactive = interactive,
-                appWidgetId = appWidgetId,
-                kind = kind,
             )
         } else if (spec.scrollable) {
             LazyColumn(modifier = GlanceModifier.fillMaxSize().defaultWeight()) {
@@ -657,9 +654,6 @@ private fun AllDoneBody(
     spec: WidgetSpec,
     doneCount: Int,
     accentIndex: Int,
-    interactive: Boolean,
-    appWidgetId: Int,
-    kind: WidgetKind,
 ) {
     Column(
         modifier = GlanceModifier.fillMaxSize().semantics { testTag = WidgetTags.ALL_DONE },
@@ -719,28 +713,26 @@ private fun WidgetFooter(
             modifier = GlanceModifier.defaultWeight(),
             style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 11.sp),
         )
-        run {
-            IconAction(
-                icon = if (showCompleted) R.drawable.ic_widget_eye_off else R.drawable.ic_widget_eye,
-                label = if (showCompleted) "Hide completed tasks" else "Show completed tasks",
-                action = actionRunCallback<ToggleShowCompletedAction>(params),
-                size = 34.dp,
-                iconScale = 0.5f,
-                tint = GlanceTheme.colors.onSurfaceVariant,
-                testTag = WidgetTags.SHOW_COMPLETED,
-                interactive = interactive,
-            )
-            IconAction(
-                icon = R.drawable.ic_widget_broom,
-                label = "Clear ${list.doneCount} completed tasks",
-                action = actionRunCallback<ClearCompletedAction>(params),
-                size = 34.dp,
-                iconScale = 0.5f,
-                tint = GlanceTheme.colors.onSurfaceVariant,
-                testTag = WidgetTags.CLEAR_COMPLETED,
-                interactive = interactive,
-            )
-        }
+        IconAction(
+            icon = if (showCompleted) R.drawable.ic_widget_eye_off else R.drawable.ic_widget_eye,
+            label = if (showCompleted) "Hide completed tasks" else "Show completed tasks",
+            action = actionRunCallback<ToggleShowCompletedAction>(params),
+            size = 34.dp,
+            iconScale = 0.5f,
+            tint = GlanceTheme.colors.onSurfaceVariant,
+            testTag = WidgetTags.SHOW_COMPLETED,
+            interactive = interactive,
+        )
+        IconAction(
+            icon = R.drawable.ic_widget_broom,
+            label = "Clear ${list.doneCount} completed tasks",
+            action = actionRunCallback<ClearCompletedAction>(params),
+            size = 34.dp,
+            iconScale = 0.5f,
+            tint = GlanceTheme.colors.onSurfaceVariant,
+            testTag = WidgetTags.CLEAR_COMPLETED,
+            interactive = interactive,
+        )
     }
 }
 

@@ -12,6 +12,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.simpletodo.AppGraph
 import com.simpletodo.widget.WidgetKind
 import com.simpletodo.widget.WidgetPinning
 import kotlinx.coroutines.launch
@@ -55,6 +57,10 @@ fun TodoApp(
 
     var showNewListDialog by remember { mutableStateOf(false) }
     var pinTarget by remember { mutableStateOf<String?>(null) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    val themePreference = remember(context) { AppGraph.get(context).theme }
+    val themeMode by themePreference.mode.collectAsState()
 
     LaunchedEffect(requestNonce) {
         if (requestedListId != null) viewModel.openList(requestedListId)
@@ -99,6 +105,8 @@ fun TodoApp(
                 snackbarHostState = snackbarHostState,
                 onNewList = { showNewListDialog = true },
                 onAddWidget = { pinTarget = it },
+                themeMode = themeMode,
+                onTheme = { showThemeDialog = true },
                 modifier = Modifier.fillMaxWidth().widthIn(max = 640.dp),
             )
         }
@@ -115,6 +123,16 @@ fun TodoApp(
                 showNewListDialog = false
                 viewModel.createList(name, accent) { id -> viewModel.openList(id) }
             },
+        )
+    }
+
+    if (showThemeDialog) {
+        ThemeDialog(
+            current = themeMode,
+            // Applied on the tap rather than on a confirm button: the whole app recolours behind
+            // the open dialog, which is the clearest possible preview of the choice.
+            onPick = { themePreference.set(it) },
+            onDismiss = { showThemeDialog = false },
         )
     }
 

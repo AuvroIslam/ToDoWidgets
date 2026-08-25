@@ -72,8 +72,8 @@ data class WidgetSpec(
             val w = size.width
             val h = size.height
             return when {
-                w >= PANEL_WIDTH && h >= PANEL_HEIGHT -> panel(h)
-                w >= WIDE && h >= TALL_ENOUGH -> tall(h)
+                w >= PANEL_WIDTH && h >= PANEL_HEIGHT -> panel()
+                w >= WIDE && h >= TALL_ENOUGH -> tall()
                 w >= WIDE -> standard(h)
                 else -> compact(h)
             }
@@ -113,8 +113,13 @@ data class WidgetSpec(
             taskMaxLines = 1,
         )
 
-        /** 4x4. A list you actually work from: scrolls, shows completed, has list controls. */
-        private fun tall(height: Dp) = WidgetSpec(
+        /**
+         * 4x4. A list you actually work from: scrolls, shows completed, has list controls.
+         *
+         * No row budget to compute — from here up the list scrolls, so the cap only has to be
+         * past anything a person will realistically put in one list.
+         */
+        private fun tall() = WidgetSpec(
             layout = WidgetLayout.TALL,
             maxTasks = 60,
             showDeleteButton = true,
@@ -131,7 +136,7 @@ data class WidgetSpec(
         )
 
         /** Full width and tall. Same tools, but roomy: two-line titles and a progress bar. */
-        private fun panel(height: Dp) = WidgetSpec(
+        private fun panel() = WidgetSpec(
             layout = WidgetLayout.PANEL,
             maxTasks = 120,
             showDeleteButton = true,

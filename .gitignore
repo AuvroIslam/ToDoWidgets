@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild
+.cxx
+.kotlin/
+
+# Signing material. The keystore itself lives outside the project tree; this covers the
+# credentials file and any stray key that gets copied in here by mistake.
+keystore.properties
+*.jks
+*.keystore
+

@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="400dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="5"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="250dp"
+    android:maxResizeWidth="860dp"
+    android:maxResizeHeight="980dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@drawable/widget_shot_xlarge"
+    android:description="@string/widget_xlarge_description"
+    android:configure="com.simpletodo.widget.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable"
+    android:widgetCategory="home_screen" />

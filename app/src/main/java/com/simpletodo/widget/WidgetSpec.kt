@@ -50,7 +50,6 @@ data class WidgetSpec(
     val showCompletedSection: Boolean,
     val showFooter: Boolean,
     val showListControls: Boolean,
-    val scrollable: Boolean,
     val rowHeight: Dp,
     val controlSize: Dp,
     val outerPadding: Dp,
@@ -59,10 +58,20 @@ data class WidgetSpec(
     val taskMaxLines: Int,
 ) {
     companion object {
+        /**
+         * Upper bound on the rows handed to the launcher, the same at every size.
+         *
+         * Not a layout budget: every size scrolls, so a widget's height no longer decides how much
+         * of a list it can show. This is a guard on the RemoteViews payload, which crosses a Binder
+         * transaction to the launcher — a list long enough to blow that limit would take the whole
+         * update with it. Well past what anyone keeps in one list, and far under the limit.
+         */
+        private const val MAX_ROWS = 120
+
         /** Below this width there is no room for a delete control next to the text. */
         private val WIDE = 240.dp
 
-        /** Below this height a scrolling list with a footer would leave nothing to scroll. */
+        /** Below this height there is no room for a footer on top of a usable list. */
         private val TALL_ENOUGH = 240.dp
 
         private val PANEL_WIDTH = 300.dp
@@ -74,20 +83,19 @@ data class WidgetSpec(
             return when {
                 w >= PANEL_WIDTH && h >= PANEL_HEIGHT -> panel()
                 w >= WIDE && h >= TALL_ENOUGH -> tall()
-                w >= WIDE -> standard(h)
-                else -> compact(h)
+                w >= WIDE -> standard()
+                else -> compact()
             }
         }
 
-        /** 2x2. Just enough to see what is next and tick it off. */
-        private fun compact(height: Dp) = WidgetSpec(
+        /** 2x2. Just enough to see what is next and tick it off — then scroll for the rest. */
+        private fun compact() = WidgetSpec(
             layout = WidgetLayout.COMPACT,
-            maxTasks = rowsThatFit(height, padding = 10, header = 46, row = 36, footer = 0, cap = 6),
+            maxTasks = MAX_ROWS,
             showDeleteButton = false,
             showCompletedSection = false,
             showFooter = false,
             showListControls = false,
-            scrollable = false,
             rowHeight = 36.dp,
             controlSize = 36.dp,
             outerPadding = 10.dp,
@@ -97,14 +105,13 @@ data class WidgetSpec(
         )
 
         /** 4x2. Wide enough for a real title bar and a delete affordance per row. */
-        private fun standard(height: Dp) = WidgetSpec(
+        private fun standard() = WidgetSpec(
             layout = WidgetLayout.STANDARD,
-            maxTasks = rowsThatFit(height, padding = 12, header = 48, row = 44, footer = 0, cap = 8),
+            maxTasks = MAX_ROWS,
             showDeleteButton = true,
             showCompletedSection = false,
             showFooter = false,
             showListControls = false,
-            scrollable = false,
             rowHeight = 44.dp,
             controlSize = 44.dp,
             outerPadding = 12.dp,
@@ -113,20 +120,14 @@ data class WidgetSpec(
             taskMaxLines = 1,
         )
 
-        /**
-         * 4x4. A list you actually work from: scrolls, shows completed, has list controls.
-         *
-         * No row budget to compute — from here up the list scrolls, so the cap only has to be
-         * past anything a person will realistically put in one list.
-         */
+        /** 4x4. A list you actually work from: shows completed, and has the list controls. */
         private fun tall() = WidgetSpec(
             layout = WidgetLayout.TALL,
-            maxTasks = 60,
+            maxTasks = MAX_ROWS,
             showDeleteButton = true,
             showCompletedSection = true,
             showFooter = true,
             showListControls = true,
-            scrollable = true,
             rowHeight = 46.dp,
             controlSize = 46.dp,
             outerPadding = 12.dp,
@@ -138,12 +139,11 @@ data class WidgetSpec(
         /** Full width and tall. Same tools, but roomy: two-line titles and a progress bar. */
         private fun panel() = WidgetSpec(
             layout = WidgetLayout.PANEL,
-            maxTasks = 120,
+            maxTasks = MAX_ROWS,
             showDeleteButton = true,
             showCompletedSection = true,
             showFooter = true,
             showListControls = true,
-            scrollable = true,
             rowHeight = 52.dp,
             controlSize = 50.dp,
             outerPadding = 14.dp,
@@ -151,24 +151,5 @@ data class WidgetSpec(
             taskSize = 15.sp,
             taskMaxLines = 2,
         )
-
-        /**
-         * How many fixed-height rows fit in the space left over after the widget's own padding,
-         * the header and the footer. Getting the padding into this sum matters: without it the
-         * last row is laid out past the bottom edge and the launcher clips it in half.
-         *
-         * Always at least one, so a squashed widget still shows the next task rather than nothing.
-         */
-        private fun rowsThatFit(
-            height: Dp,
-            padding: Int,
-            header: Int,
-            row: Int,
-            footer: Int,
-            cap: Int,
-        ): Int {
-            val usable = height.value - (padding * 2) - header - footer
-            return (usable / row).toInt().coerceIn(1, cap)
-        }
     }
 }

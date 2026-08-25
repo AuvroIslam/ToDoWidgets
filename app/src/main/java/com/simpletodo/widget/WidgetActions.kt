@@ -8,7 +8,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import com.simpletodo.AppGraph
 
 private const val TAG = "WidgetActions"
@@ -47,6 +49,23 @@ private suspend fun editState(
 }
 
 /**
+ * Cancels an armed delete, but only when one is actually armed.
+ *
+ * [updateAppWidgetState] commits whatever the block does — including nothing — and each commit is
+ * a state change Glance repaints for. Clearing unconditionally therefore cost a second write and a
+ * second repaint on *every* tick, when the overwhelmingly common case is that nothing is armed.
+ * Fewer repaints per tap means less time spent rebuilding the row a thumb is aiming at.
+ */
+private suspend fun clearPendingDelete(context: Context, glanceId: GlanceId) {
+    val armed = runCatching {
+        getAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId)[
+            WidgetPrefs.PENDING_DELETE,
+        ] != null
+    }.getOrDefault(false)
+    if (armed) editState(context, glanceId) { it.remove(WidgetPrefs.PENDING_DELETE) }
+}
+
+/**
  * Ticks a task off (or back on).
  *
  * The repository flips the stored value rather than applying an absolute one, so two widgets
@@ -63,7 +82,7 @@ class ToggleTaskAction : ActionCallback {
         runCatching { AppGraph.repository(context).toggleTask(listId, taskId) }
             .onFailure { Log.w(TAG, "Toggle failed", it) }
         // Any tap elsewhere in the widget cancels a pending delete confirmation.
-        editState(context, glanceId) { it.remove(WidgetPrefs.PENDING_DELETE) }
+        clearPendingDelete(context, glanceId)
         refreshWidget(context, glanceId, parameters)
     }
 }

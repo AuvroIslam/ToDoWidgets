@@ -29,10 +29,10 @@ android {
         applicationId = "com.auvro.todowidget"
         minSdk = 26
         targetSdk = 36
-        // 1 is already published. Play refuses a second upload at the same code, so any build
-        // that is meant to replace it has to move past it.
-        versionCode = 2
-        versionName = "1.0.1"
+        // Play refuses a second upload at the same code, so any build meant to replace what is
+        // already up there has to move past it.
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

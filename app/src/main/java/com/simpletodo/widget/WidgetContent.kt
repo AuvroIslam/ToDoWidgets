@@ -72,7 +72,6 @@ object WidgetTags {
     const val SHOW_COMPLETED = "widget_show_completed"
     const val CLEAR_COMPLETED = "widget_clear_completed"
 
-    fun toggle(taskId: String) = "toggle_$taskId"
     fun delete(taskId: String) = "delete_$taskId"
     fun confirmDelete(taskId: String) = "confirm_delete_$taskId"
     fun cancelDelete(taskId: String) = "cancel_delete_$taskId"
@@ -259,7 +258,10 @@ private fun ReadyState(
                 doneCount = completed.size,
                 accentIndex = list.accent,
             )
-        } else if (spec.scrollable) {
+        } else {
+            // Every size scrolls, including the 2x2. A widget is a fixed window onto a list that
+            // is not: capping the rows to whatever happened to fit meant the tasks past the cap
+            // were simply unreachable, with nothing on screen to say they existed.
             LazyColumn(modifier = GlanceModifier.fillMaxSize().defaultWeight()) {
                 items(visible, itemId = { it.id.hashCode().toLong() }) { task ->
                     Column {
@@ -274,20 +276,6 @@ private fun ReadyState(
                         )
                         Spacer(GlanceModifier.height(2.dp))
                     }
-                }
-            }
-        } else {
-            Column(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
-                visible.forEach { task ->
-                    TaskRow(
-                        task = task,
-                        listId = list.id,
-                        accentIndex = list.accent,
-                        kind = kind,
-                        spec = spec,
-                        interactive = interactive,
-                        pendingDelete = pendingDeleteId == task.id,
-                    )
                 }
             }
         }
@@ -512,31 +500,45 @@ private fun TaskRow(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(spec.rowHeight)
-            .semantics { testTag = WidgetTags.row(task.id) },
+            // The whole row ticks the task, rather than a small circle and the label carrying
+            // separate clicks. Inside a LazyColumn every click is delivered by launching Glance's
+            // invisible trampoline activity, and one target per item is both the most forgiving
+            // thing to hit with a thumb and the most reliable thing for that route to deliver:
+            // on a 2x2 the circle alone was a 36dp box holding an 18dp glyph.
+            .clickableIf(interactive, actionRunCallback<ToggleTaskAction>(params))
+            .semantics {
+                testTag = WidgetTags.row(task.id)
+                contentDescription = if (task.isDone) {
+                    "${task.title}, completed. Mark as not done."
+                } else {
+                    "${task.title}, not completed. Mark as done."
+                }
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconAction(
-            icon = if (task.isDone) R.drawable.ic_widget_circle_check else R.drawable.ic_widget_circle,
-            label = if (task.isDone) {
-                "${task.title}, completed. Mark as not done."
-            } else {
-                "${task.title}, not completed. Mark as done."
-            },
-            action = actionRunCallback<ToggleTaskAction>(params),
-            size = spec.controlSize,
-            iconScale = 0.52f,
-            tint = if (task.isDone) accentText(accentIndex) else GlanceTheme.colors.onSurfaceVariant,
-            testTag = WidgetTags.toggle(task.id),
-            interactive = interactive,
-        )
+        // Now purely the state indicator: the row around it carries the click.
+        Box(
+            modifier = GlanceModifier.size(spec.controlSize),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                provider = ImageProvider(
+                    if (task.isDone) R.drawable.ic_widget_circle_check else R.drawable.ic_widget_circle,
+                ),
+                contentDescription = null,
+                modifier = GlanceModifier.size(spec.controlSize * 0.52f),
+                colorFilter = ColorFilter.tint(
+                    if (task.isDone) accentText(accentIndex) else GlanceTheme.colors.onSurfaceVariant,
+                ),
+            )
+        }
 
         Text(
             text = task.title,
             maxLines = spec.taskMaxLines,
             modifier = GlanceModifier
                 .defaultWeight()
-                .padding(end = 4.dp)
-                .clickableIf(interactive, actionRunCallback<ToggleTaskAction>(params)),
+                .padding(end = 4.dp),
             style = TextStyle(
                 color = if (task.isDone) GlanceTheme.colors.onSurfaceVariant else GlanceTheme.colors.onSurface,
                 fontSize = spec.taskSize,

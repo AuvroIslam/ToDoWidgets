@@ -17,7 +17,7 @@ Add a task, tick it off, delete it — without ever opening the app.
 
 <br />
 
-<a href="https://drive.google.com/file/d/1HUqEe2dcPV2Oe4R6dddZWDCJS36gNqV6/view?usp=sharing">
+<a href="https://drive.google.com/file/d/145odBPue3BfFwgNlh3YM-xRWK604xYOK/view?usp=sharing">
   <img src="https://img.shields.io/badge/Download%20the%20APK-FCBA15?style=for-the-badge&logo=android&logoColor=black&labelColor=1A1A1A" alt="Download the APK" />
 </a>
 
@@ -49,14 +49,15 @@ is finished.
 
 ## Everything happens on the home screen
 
-![Manage your tasks right from your home screen](githubimages/selling_point.png)
+![Manage your tasks right from your home screen — add, complete and keep it simple](githubimages/sellingPoint.png)
 
 The widget is fully interactive — not a preview of the app, but the app itself:
 
 | Action | How |
 | --- | --- |
 | **Add** a task | Tap `+` on the widget. A small sheet opens over the home screen with the keyboard already up — the full app never appears. |
-| **Complete** a task | Tap its circle. It strikes through and stays put, so the tap has visible feedback and a mistake is one tap to undo. |
+| **Complete** a task | Tap anywhere on the row. It strikes through and stays put, so the tap has visible feedback and a mistake is one tap to undo. |
+| **Scroll** a long list | Every size scrolls, down to the 2 × 2. A widget is a fixed window onto a list that is not, so nothing is ever stranded past the bottom edge. |
 | **Delete** a task | Tap the bin, then confirm. Two deliberate taps, with the confirm control on the opposite side of the row, so a fat-finger costs nothing. |
 | **Hide / show** completed | Tap the eye in the footer. |
 | **Clear** completed | Tap the broom. |
@@ -89,11 +90,14 @@ Four sizes are offered in the picker, but the layout is chosen from the widget's
 not the one you picked — so stretching a small widget across the screen genuinely upgrades it rather
 than scaling it up.
 
+**All four scroll.** The size decides how much you see at once and which controls fit, never how
+much of the list you can reach.
+
 | Size | Cells | What you get |
 | --- | --- | --- |
 | **Small** | 2 × 2 | What's next, at a glance. Tick tasks, quick add. |
 | **Medium** | 4 × 2 | A few tasks, with a delete control on each row. |
-| **Large** | 4 × 4 | Scrollable list, show/hide completed, clear completed, switch list. |
+| **Large** | 4 × 4 | Show/hide completed, clear completed, switch list. |
 | **Extra large** | 5 × 5 | The whole list, roomier rows and a progress bar. |
 
 The widget's header band takes the colour of the list it shows, so two widgets side by side are
@@ -158,7 +162,7 @@ source lives.
 
 ## Download
 
-**[⬇ Download the APK](https://drive.google.com/file/d/1HUqEe2dcPV2Oe4R6dddZWDCJS36gNqV6/view?usp=sharing)** — Android 8.0 (API 26) or newer.
+**[⬇ Download the APK](https://drive.google.com/file/d/145odBPue3BfFwgNlh3YM-xRWK604xYOK/view?usp=sharing)** — Android 8.0 (API 26) or newer.
 
 Because this is a direct APK rather than a store install, Android will ask you to allow installs
 from whichever app you download it with (Chrome, Files, Drive). That prompt is Android's, not the

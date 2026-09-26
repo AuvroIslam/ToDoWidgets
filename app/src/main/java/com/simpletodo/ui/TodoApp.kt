@@ -40,6 +40,8 @@ object AppTags {
     fun taskItem(id: String) = "task_item_$id"
     fun taskCheckbox(id: String) = "task_checkbox_$id"
     fun taskDelete(id: String) = "task_delete_$id"
+    fun taskMenu(id: String) = "task_menu_$id"
+    fun taskLink(id: String) = "task_link_$id"
 }
 
 @Composable

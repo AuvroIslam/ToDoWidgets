@@ -9,6 +9,7 @@ package com.simpletodo.data
 /** Hard limits, enforced on write so that malformed data can never reach the widgets. */
 object TodoLimits {
     const val TASK_TITLE_MAX = 300
+    const val TASK_URL_MAX = 2048
     const val LIST_NAME_MAX = 40
     const val MAX_LISTS = 100
     const val MAX_TASKS_PER_LIST = 1000
@@ -20,6 +21,8 @@ data class Task(
     val isDone: Boolean = false,
     val createdAt: Long = 0L,
     val completedAt: Long? = null,
+    /** A web link the task points at, e.g. a post shared in from another app. */
+    val url: String? = null,
 )
 
 data class TodoList(

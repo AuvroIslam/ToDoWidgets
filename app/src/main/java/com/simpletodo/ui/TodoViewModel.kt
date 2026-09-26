@@ -93,6 +93,10 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
         repository.editTask(listId, taskId, title)
     }
 
+    fun setTaskLink(listId: String, taskId: String, url: String?) = viewModelScope.launch {
+        repository.setTaskUrl(listId, taskId, url)
+    }
+
     fun deleteTask(listId: String, taskId: String) = viewModelScope.launch {
         val list = repository.current().listById(listId) ?: return@launch
         val index = list.tasks.indexOfFirst { it.id == taskId }

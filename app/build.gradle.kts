@@ -31,8 +31,8 @@ android {
         targetSdk = 36
         // Play refuses a second upload at the same code, so any build meant to replace what is
         // already up there has to move past it.
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -116,6 +116,9 @@ dependencies {
 
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
+    // Glance already runs on WorkManager; the widget also uses it directly to put a just-ticked
+    // task away a few seconds after the tap. See WidgetLinger.
+    implementation(libs.androidx.work.runtime.ktx)
 
     implementation(libs.androidx.datastore)
     // The widgets' per-instance state (pending delete, show-completed) is a Preferences DataStore,

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,9 +49,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import com.simpletodo.data.ACCENT_COUNT
+import com.simpletodo.data.TaskLinks
 import com.simpletodo.data.ThemeMode
 import com.simpletodo.data.TodoLimits
 import com.simpletodo.ui.theme.TodoAccents
@@ -58,6 +61,7 @@ import com.simpletodo.widget.WidgetKind
 
 object DialogTags {
     const val NAME_FIELD = "dialog_name_field"
+    const val LINK_FIELD = "dialog_link_field"
     const val CONFIRM = "dialog_confirm"
     const val CANCEL = "dialog_cancel"
 
@@ -376,5 +380,84 @@ fun AddWidgetDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/**
+ * Attaches a link to a task by hand, for when it did not arrive through the share sheet.
+ *
+ * @param initial the task's current link, or null when it has none yet.
+ * @param onSave receives a checked, complete link.
+ * @param onRemove shown only when there is a link to remove.
+ */
+@Composable
+fun LinkDialog(
+    initial: String?,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onRemove: (() -> Unit)?,
+) {
+    var value by remember { mutableStateOf(initial.orEmpty()) }
+    var invalid by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    fun save() {
+        val link = TaskLinks.parseTyped(value)
+        if (link == null) invalid = true else onSave(link)
+    }
+
+    AlertDialog(
+        modifier = DialogSize,
+        properties = DialogFreeWidth,
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.Link, contentDescription = null) },
+        title = { Text(if (initial == null) "Add link" else "Change link") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = {
+                    value = it.take(TodoLimits.TASK_URL_MAX)
+                    invalid = false
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .testTag(DialogTags.LINK_FIELD),
+                singleLine = true,
+                shape = MaterialTheme.shapes.small,
+                placeholder = { Text("Paste a link") },
+                isError = invalid,
+                supportingText = if (invalid) {
+                    { Text("That doesn't look like a web link") }
+                } else {
+                    null
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { if (value.isNotBlank()) save() }),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { save() },
+                enabled = value.isNotBlank(),
+                modifier = Modifier.testTag(DialogTags.CONFIRM),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            Row {
+                if (onRemove != null) {
+                    TextButton(onClick = onRemove) {
+                        Text("Remove", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.testTag(DialogTags.CANCEL)) {
+                    Text("Cancel")
+                }
+            }
+        },
     )
 }

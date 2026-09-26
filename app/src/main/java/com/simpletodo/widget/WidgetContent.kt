@@ -53,6 +53,7 @@ import com.simpletodo.R
 import com.simpletodo.data.Task
 import com.simpletodo.data.TodoList
 import com.simpletodo.quickadd.QuickAddActivity
+import com.simpletodo.quickadd.TaskOptionsActivity
 import com.simpletodo.ui.MainActivity
 import com.simpletodo.ui.theme.TodoAccents
 
@@ -72,9 +73,7 @@ object WidgetTags {
     const val SHOW_COMPLETED = "widget_show_completed"
     const val CLEAR_COMPLETED = "widget_clear_completed"
 
-    fun delete(taskId: String) = "delete_$taskId"
-    fun confirmDelete(taskId: String) = "confirm_delete_$taskId"
-    fun cancelDelete(taskId: String) = "cancel_delete_$taskId"
+    fun more(taskId: String) = "more_$taskId"
     fun row(taskId: String) = "row_$taskId"
 }
 
@@ -87,8 +86,8 @@ fun TodoWidgetBody(
 ) {
     val spec = WidgetSpec.forSize(LocalSize.current)
     val prefs = if (interactive) LocalState.current as? Preferences else null
-    val showCompleted = prefs?.get(WidgetPrefs.SHOW_COMPLETED) ?: false
-    val pendingDeleteId = prefs?.get(WidgetPrefs.PENDING_DELETE)
+    val showCompleted = prefs?.get(WidgetPrefs.SHOW_COMPLETED) ?: WidgetPrefs.SHOW_COMPLETED_DEFAULT
+    val justDone = WidgetLinger.lingering(prefs, System.currentTimeMillis())
 
     // The padding lives inside each state rather than on this Box: the ready state's header is a
     // colour band that has to run edge to edge, right up under the widget's rounded corners.
@@ -115,7 +114,7 @@ fun TodoWidgetBody(
                 spec = spec,
                 interactive = interactive,
                 showCompleted = showCompleted,
-                pendingDeleteId = pendingDeleteId,
+                justDone = justDone,
             )
         }
     }
@@ -228,7 +227,7 @@ private fun ReadyState(
     spec: WidgetSpec,
     interactive: Boolean,
     showCompleted: Boolean,
-    pendingDeleteId: String?,
+    justDone: Set<String>,
 ) {
     val context = LocalContext.current
     val addAction = actionStartActivity(
@@ -246,8 +245,10 @@ private fun ReadyState(
         )
 
         WidgetBody(list = list, spec = spec, modifier = GlanceModifier.defaultWeight()) {
-        val active = list.activeTasks
-        val completed = list.completedTasks
+        // A task ticked a moment ago keeps its place among the open ones, struck through, until
+        // WidgetLinger puts it away; only then does it join the completed tasks below.
+        val active = list.tasks.filter { !it.isDone || it.id in justDone }
+        val completed = list.tasks.filter { it.isDone && it.id !in justDone }
         val visible = buildVisibleTasks(spec, active, completed, showCompleted)
 
         if (list.tasks.isEmpty()) {
@@ -270,9 +271,9 @@ private fun ReadyState(
                             listId = list.id,
                             accentIndex = list.accent,
                             kind = kind,
+                            appWidgetId = appWidgetId,
                             spec = spec,
                             interactive = interactive,
-                            pendingDelete = pendingDeleteId == task.id,
                         )
                         Spacer(GlanceModifier.height(2.dp))
                     }
@@ -481,15 +482,11 @@ private fun TaskRow(
     listId: String,
     accentIndex: Int,
     kind: WidgetKind,
+    appWidgetId: Int,
     spec: WidgetSpec,
     interactive: Boolean,
-    pendingDelete: Boolean,
 ) {
-    if (pendingDelete) {
-        ConfirmDeleteRow(task = task, listId = listId, kind = kind, spec = spec, interactive = interactive)
-        return
-    }
-
+    val context = LocalContext.current
     val params = actionParametersOf(
         WidgetParams.LIST_ID to listId,
         WidgetParams.TASK_ID to task.id,
@@ -546,79 +543,22 @@ private fun TaskRow(
             ),
         )
 
-        if (spec.showDeleteButton) {
+        // Everything else — edit, link, copy, delete — lives behind one ⋮, as it does in the app.
+        // A widget cannot pop up a menu, so this opens the options sheet over the home screen.
+        if (spec.showTaskMenu) {
             IconAction(
-                icon = R.drawable.ic_widget_delete,
-                label = "Delete ${task.title}",
-                action = actionRunCallback<RequestDeleteTaskAction>(params),
+                icon = R.drawable.ic_widget_more,
+                label = "More options for ${task.title}",
+                action = actionStartActivity(
+                    TaskOptionsActivity.intent(context, listId, task.id, appWidgetId),
+                ),
                 size = spec.controlSize * 0.86f,
-                iconScale = 0.48f,
+                iconScale = 0.5f,
                 tint = GlanceTheme.colors.onSurfaceVariant,
-                testTag = WidgetTags.delete(task.id),
+                testTag = WidgetTags.more(task.id),
                 interactive = interactive,
             )
         }
-    }
-}
-
-/**
- * The armed state of a row. Deleting takes two deliberate taps and the confirm control sits on the
- * opposite side of the row from the completion circle, so a mis-tap costs nothing.
- */
-@Composable
-private fun ConfirmDeleteRow(
-    task: Task,
-    listId: String,
-    kind: WidgetKind,
-    spec: WidgetSpec,
-    interactive: Boolean,
-) {
-    val params = actionParametersOf(
-        WidgetParams.LIST_ID to listId,
-        WidgetParams.TASK_ID to task.id,
-        WidgetParams.KIND to kind.key,
-    )
-    Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .height(spec.rowHeight)
-            .background(GlanceTheme.colors.errorContainer)
-            .cornerRadius(12.dp)
-            .padding(start = 10.dp)
-            .semantics { testTag = WidgetTags.row(task.id) },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Delete “${task.title}”?",
-            maxLines = 1,
-            modifier = GlanceModifier.defaultWeight(),
-            style = TextStyle(
-                color = GlanceTheme.colors.onErrorContainer,
-                fontSize = spec.taskSize,
-                fontWeight = FontWeight.Medium,
-            ),
-        )
-        IconAction(
-            icon = R.drawable.ic_widget_close,
-            label = "Keep ${task.title}",
-            action = actionRunCallback<CancelDeleteTaskAction>(params),
-            size = spec.controlSize * 0.86f,
-            iconScale = 0.46f,
-            tint = GlanceTheme.colors.onErrorContainer,
-            testTag = WidgetTags.cancelDelete(task.id),
-            interactive = interactive,
-        )
-        IconAction(
-            icon = R.drawable.ic_widget_check,
-            label = "Confirm deleting ${task.title}",
-            action = actionRunCallback<ConfirmDeleteTaskAction>(params),
-            size = spec.controlSize * 0.86f,
-            iconScale = 0.46f,
-            tint = GlanceTheme.colors.onError,
-            background = GlanceTheme.colors.error,
-            testTag = WidgetTags.confirmDelete(task.id),
-            interactive = interactive,
-        )
     }
 }
 

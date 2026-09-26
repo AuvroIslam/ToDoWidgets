@@ -46,7 +46,7 @@ enum class WidgetLayout { COMPACT, STANDARD, TALL, PANEL }
 data class WidgetSpec(
     val layout: WidgetLayout,
     val maxTasks: Int,
-    val showDeleteButton: Boolean,
+    val showTaskMenu: Boolean,
     val showCompletedSection: Boolean,
     val showFooter: Boolean,
     val showListControls: Boolean,
@@ -92,7 +92,7 @@ data class WidgetSpec(
         private fun compact() = WidgetSpec(
             layout = WidgetLayout.COMPACT,
             maxTasks = MAX_ROWS,
-            showDeleteButton = false,
+            showTaskMenu = false,
             showCompletedSection = false,
             showFooter = false,
             showListControls = false,
@@ -108,7 +108,7 @@ data class WidgetSpec(
         private fun standard() = WidgetSpec(
             layout = WidgetLayout.STANDARD,
             maxTasks = MAX_ROWS,
-            showDeleteButton = true,
+            showTaskMenu = true,
             showCompletedSection = false,
             showFooter = false,
             showListControls = false,
@@ -124,7 +124,7 @@ data class WidgetSpec(
         private fun tall() = WidgetSpec(
             layout = WidgetLayout.TALL,
             maxTasks = MAX_ROWS,
-            showDeleteButton = true,
+            showTaskMenu = true,
             showCompletedSection = true,
             showFooter = true,
             showListControls = true,
@@ -140,7 +140,7 @@ data class WidgetSpec(
         private fun panel() = WidgetSpec(
             layout = WidgetLayout.PANEL,
             maxTasks = MAX_ROWS,
-            showDeleteButton = true,
+            showTaskMenu = true,
             showCompletedSection = true,
             showFooter = true,
             showListControls = true,

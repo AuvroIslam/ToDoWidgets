@@ -41,6 +41,38 @@
             android:windowSoftInputMode="adjustResize|stateVisible" />
 
         <!--
+            The ⋮ on a widget row: edit, link, copy and delete as a sheet over the home screen.
+            Not exported, for the same reason as the quick-add sheet above.
+        -->
+        <activity
+            android:name=".quickadd.TaskOptionsActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SimpleTodo.Transparent"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!--
+            "Share → TodoWidget" from any app that shares text: YouTube, Facebook, LinkedIn, a
+            browser. Exported because other apps start it; everything it reads is sanitised before
+            it is stored. It opens over the sharing app, so the user never leaves what they were in.
+        -->
+        <activity
+            android:name=".quickadd.ShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.SimpleTodo.Transparent"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!--
             Exported because the launcher starts it directly for first-time widget configuration.
             It is also reused as the "change list" screen from the widget itself.
         -->

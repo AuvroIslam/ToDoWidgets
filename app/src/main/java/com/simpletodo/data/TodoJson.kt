@@ -29,6 +29,7 @@ object TodoJson {
     private const val KEY_TITLE = "title"
     private const val KEY_DONE = "done"
     private const val KEY_COMPLETED = "completedAt"
+    private const val KEY_URL = "url"
 
     fun encode(snapshot: TodoSnapshot): String {
         val root = JSONObject()
@@ -51,6 +52,7 @@ object TodoJson {
                 taskObj.put(KEY_DONE, task.isDone)
                 taskObj.put(KEY_CREATED, task.createdAt)
                 if (task.completedAt != null) taskObj.put(KEY_COMPLETED, task.completedAt)
+                if (task.url != null) taskObj.put(KEY_URL, task.url)
                 tasks.put(taskObj)
             }
             listObj.put(KEY_TASKS, tasks)
@@ -104,6 +106,7 @@ object TodoJson {
                     } else {
                         null
                     },
+                    url = TaskLinks.sanitize(taskObj.optString(KEY_URL)),
                 )
                 if (tasks.size >= TodoLimits.MAX_TASKS_PER_LIST) break
             }

@@ -32,9 +32,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddLink
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -43,6 +46,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Widgets
@@ -69,6 +73,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,6 +85,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -96,12 +102,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.simpletodo.R
 import com.simpletodo.data.Task
+import com.simpletodo.data.TaskLinks
 import com.simpletodo.data.ThemeMode
 import com.simpletodo.data.TodoLimits
 import com.simpletodo.data.TodoList
 import com.simpletodo.data.TodoSnapshot
 import com.simpletodo.ui.theme.TodoAccents
 import com.simpletodo.ui.theme.accentTextColor
+import kotlinx.coroutines.launch
 
 /** A task together with the list it belongs to, which the "All" filter needs and a list view has. */
 private data class TaskEntry(val list: TodoList, val task: Task)
@@ -136,6 +144,18 @@ fun HomeScreen(
     var activeCollapsed by remember { mutableStateOf(false) }
     var completedCollapsed by remember { mutableStateOf(false) }
     var editingTaskId by remember(selected?.id) { mutableStateOf<String?>(null) }
+    var linkTarget by remember { mutableStateOf<Pair<String, String>?>(null) } // list id to task id
+
+    val context = LocalContext.current
+    val messages = rememberCoroutineScope()
+    val onCopy: (String) -> Unit = { text ->
+        if (copyToClipboard(context, text)) messages.launch { snackbarHostState.showSnackbar("Copied") }
+    }
+    val onOpenLink: (String) -> Unit = { url ->
+        if (!openLink(context, url)) {
+            messages.launch { snackbarHostState.showSnackbar("No app on this phone can open that link") }
+        }
+    }
 
     // Back steps out of a single list and into "All" before it leaves the app.
     BackHandler(enabled = selected != null) { viewModel.openList(null) }
@@ -285,6 +305,9 @@ fun HomeScreen(
                                 viewModel = viewModel,
                                 onStartEdit = { editingTaskId = entry.task.id },
                                 onEndEdit = { editingTaskId = null },
+                                onCopy = onCopy,
+                                onOpenLink = onOpenLink,
+                                onEditLink = { linkTarget = entry.list.id to entry.task.id },
                                 moveUp = if (reorderable && index > 0) {
                                     { viewModel.moveActiveTask(entry.list.id, index, index - 1) }
                                 } else {
@@ -328,6 +351,9 @@ fun HomeScreen(
                                 viewModel = viewModel,
                                 onStartEdit = { editingTaskId = entry.task.id },
                                 onEndEdit = { editingTaskId = null },
+                                onCopy = onCopy,
+                                onOpenLink = onOpenLink,
+                                onEditLink = { linkTarget = entry.list.id to entry.task.id },
                                 moveUp = null,
                                 moveDown = null,
                             )
@@ -336,6 +362,27 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    val linkTask = linkTarget?.let { (listId, taskId) ->
+        snapshot.listById(listId)?.tasks?.firstOrNull { it.id == taskId }?.let { listId to it }
+    }
+    if (linkTask != null) {
+        val (listId, task) = linkTask
+        LinkDialog(
+            initial = task.url,
+            onDismiss = { linkTarget = null },
+            onSave = { url ->
+                linkTarget = null
+                viewModel.setTaskLink(listId, task.id, url)
+            },
+            onRemove = task.url?.let {
+                {
+                    linkTarget = null
+                    viewModel.setTaskLink(listId, task.id, null)
+                }
+            },
+        )
     }
 
     val target = selected
@@ -706,6 +753,9 @@ private fun TaskSlot(
     viewModel: TodoViewModel,
     onStartEdit: () -> Unit,
     onEndEdit: () -> Unit,
+    onCopy: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
+    onEditLink: () -> Unit,
     moveUp: (() -> Unit)?,
     moveDown: (() -> Unit)?,
 ) {
@@ -730,10 +780,14 @@ private fun TaskSlot(
     TaskCard(
         task = task,
         accent = TodoAccents.colorAt(list.accent),
+        accentInk = accentTextColor(list.accent),
         listName = list.name.takeIf { showListName },
         modifier = modifier,
         onToggle = { viewModel.toggleTask(list.id, task.id) },
         onEdit = onStartEdit,
+        onCopy = onCopy,
+        onOpenLink = onOpenLink,
+        onEditLink = onEditLink,
         onDelete = { viewModel.deleteTask(list.id, task.id) },
         moveUp = moveUp,
         moveDown = moveDown,
@@ -744,18 +798,30 @@ private fun TaskSlot(
 private fun TaskCard(
     task: Task,
     accent: Color,
+    accentInk: Color,
     listName: String?,
     modifier: Modifier,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
+    onCopy: (String) -> Unit,
+    onOpenLink: (String) -> Unit,
+    onEditLink: () -> Unit,
     onDelete: () -> Unit,
     moveUp: (() -> Unit)?,
     moveDown: (() -> Unit)?,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val url = task.url
+    val host = url?.let(TaskLinks::host)
+
     val actions = buildList {
         moveUp?.let { add(CustomAccessibilityAction("Move up") { it(); true }) }
         moveDown?.let { add(CustomAccessibilityAction("Move down") { it(); true }) }
+        if (url != null) add(CustomAccessibilityAction("Open link") { onOpenLink(url); true })
         add(CustomAccessibilityAction("Edit task") { onEdit(); true })
+        add(CustomAccessibilityAction(if (url == null) "Add link" else "Change link") { onEditLink(); true })
+        add(CustomAccessibilityAction("Copy text") { onCopy(task.title); true })
+        if (url != null) add(CustomAccessibilityAction("Copy link") { onCopy(url); true })
         add(CustomAccessibilityAction("Delete task") { onDelete(); true })
     }
 
@@ -764,15 +830,14 @@ private fun TaskCard(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable(onClick = onEdit)
             .heightIn(min = 62.dp)
             .padding(start = 8.dp, end = 4.dp)
             .testTag(AppTags.taskItem(task.id))
             .semantics(mergeDescendants = true) {
-                contentDescription = if (task.isDone) {
-                    "${task.title}, completed"
-                } else {
-                    "${task.title}, not completed"
+                contentDescription = buildString {
+                    append(task.title)
+                    if (host != null) append(", link to $host")
+                    append(if (task.isDone) ", completed" else ", not completed")
                 }
                 customActions = actions
             },
@@ -803,8 +868,18 @@ private fun TaskCard(
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (url != null && host != null) {
+                Spacer(Modifier.height(6.dp))
+                LinkChip(
+                    host = host,
+                    accent = accent,
+                    ink = accentInk,
+                    onOpen = { onOpenLink(url) },
+                    modifier = Modifier.testTag(AppTags.taskLink(task.id)),
+                )
+            }
             if (listName != null) {
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(if (url != null) 6.dp else 3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
                     Spacer(Modifier.width(6.dp))
@@ -818,16 +893,100 @@ private fun TaskCard(
                 }
             }
         }
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.testTag(AppTags.taskDelete(task.id)),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.DeleteOutline,
-                contentDescription = "Delete ${task.title}",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-            )
+        // Everything other than ticking and opening lives behind one menu, so a card carries a
+        // single quiet control on its right however many things can be done to it. The card body
+        // itself does nothing on a tap: a stray touch while scrolling should never open an editor.
+        Box {
+            IconButton(
+                onClick = { menuOpen = true },
+                modifier = Modifier.testTag(AppTags.taskMenu(task.id)),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "More options for ${task.title}",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                    onClick = { menuOpen = false; onEdit() },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (url == null) "Add link" else "Change link") },
+                    leadingIcon = { Icon(Icons.Rounded.AddLink, contentDescription = null) },
+                    onClick = { menuOpen = false; onEditLink() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Copy text") },
+                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                    onClick = { menuOpen = false; onCopy(task.title) },
+                )
+                if (url != null) {
+                    DropdownMenuItem(
+                        text = { Text("Copy link") },
+                        leadingIcon = { Icon(Icons.Rounded.Link, contentDescription = null) },
+                        onClick = { menuOpen = false; onCopy(url) },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    leadingIcon = { Icon(Icons.Rounded.DeleteOutline, contentDescription = null) },
+                    onClick = { menuOpen = false; onDelete() },
+                    modifier = Modifier.testTag(AppTags.taskDelete(task.id)),
+                )
+            }
         }
+    }
+}
+
+/**
+ * Where a link task goes, and the way there. A chip of its own rather than a tappable title: a
+ * title that sometimes leaves the app and sometimes does nothing gives no way to tell which one a
+ * tap will do, where a chip with the site's name on it says so before it is touched.
+ */
+@Composable
+private fun LinkChip(
+    host: String,
+    accent: Color,
+    ink: Color,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(
+                accent.copy(alpha = 0.22f).compositeOver(MaterialTheme.colorScheme.surfaceContainerHigh),
+            )
+            .clickable(onClickLabel = "Open link", role = Role.Button, onClick = onOpen)
+            .heightIn(min = 32.dp)
+            .padding(start = 10.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Link,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = ink,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = host,
+            style = MaterialTheme.typography.labelLarge,
+            color = ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = ink,
+        )
     }
 }
 
@@ -884,6 +1043,10 @@ private fun EditingTaskCard(
     var draft by remember(task.id) { mutableStateOf(task.title) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(task.id) { focusRequester.requestFocus() }
+    // onFocusChanged reports "not focused" once as the field attaches, before the request above
+    // lands. Treating that as the user leaving the field closed the editor the instant it opened,
+    // so only a blur after the field has actually held focus counts as finishing the edit.
+    var hadFocus by remember(task.id) { mutableStateOf(false) }
 
     Row(
         modifier = modifier
@@ -900,7 +1063,9 @@ private fun EditingTaskCard(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
-                .onFocusChanged { if (!it.isFocused) onCommit(draft) }
+                .onFocusChanged {
+                    if (it.isFocused) hadFocus = true else if (hadFocus) onCommit(draft)
+                }
                 .testTag("task_edit_${task.id}"),
             singleLine = false,
             maxLines = 4,

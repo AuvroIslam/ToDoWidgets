@@ -8,14 +8,18 @@
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
-    <!-- Quick add sits over the home screen, so the window itself must not paint anything. -->
+    <!--
+        The sheets that open over the home screen (quick add, task options, share). The window
+        paints nothing and does not animate: each sheet plays its own entrance and exit (see
+        SheetHost), and a window fade on top of that only muddied the motion.
+    -->
     <style name="Theme.SimpleTodo.Transparent" parent="Theme.SimpleTodo">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:backgroundDimEnabled">false</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:windowAnimationStyle">@null</item>
     </style>
 
 </resources>

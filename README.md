@@ -6,7 +6,7 @@
 
 **A to-do list you run from your home screen.**
 
-Add, tick and delete — without ever opening the app.
+Add, tick, edit and delete — without ever opening the app.
 
 ![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
@@ -45,11 +45,11 @@ I kept installing to-do apps and kept uninstalling them for the same three reaso
 
 | Action | How |
 | --- | --- |
-| **Add** | Tap `+`. A sheet opens over the home screen, keyboard up. The app never appears. |
-| **Complete** | Tap the row. |
-| **Delete** | Tap the bin, then confirm — two deliberate taps. |
+| **Add** | Tap `+`. A sheet slides up over the home screen, keyboard ready. The app never appears. |
+| **Complete** | Tap the row. It stays put, struck through, for a few seconds — tap again if that was a mistake. |
+| **Edit, link, copy, delete** | Tap `⋮` on the row. Same options as in the app; deleting asks first. |
 | **Scroll** | Every size scrolls, down to the 2 × 2. Nothing is stranded off the bottom. |
-| **Show / clear** completed | Eye and broom in the footer. |
+| **Show / clear** completed | Shown by default. Eye hides them, broom clears them. |
 | **Switch list** | Tap the swap icon. |
 
 ![No need to open the app](githubimages/widget_from_home.png)
@@ -63,9 +63,23 @@ I kept installing to-do apps and kept uninstalling them for the same three reaso
 - **One screen.** Lists are chips on top, tasks are cards below.
 - **Type and send.** The input sits at the bottom, always in reach.
 - **Multiple lists**, each with its own colour.
+- **Edit, copy or add a link** from any task's ⋮ menu.
 - **Drag to reorder**, **undo** any delete.
 - **Light / Dark / System**, in the ⋮ menu.
 - No accounts, no onboarding, no sync setup.
+
+---
+
+## Save posts for later
+
+See something on YouTube, Facebook or LinkedIn you want to get back to? **Share → TodoWidget.**
+
+- A sheet opens over the app you are in — you never leave it.
+- The post's title comes in as the label; keep it, change it, or clear it and save just the link.
+- The task shows a chip with the site's name. **Tap the chip to open the post** — in the YouTube
+  app for a YouTube link, the browser otherwise.
+- Pasting a link into the app's input does the same thing, and any task can get a link later from
+  its ⋮ menu.
 
 ---
 
@@ -77,7 +91,7 @@ widget instead of stretching it. **All four scroll.**
 | Size | Cells | What you get |
 | --- | --- | --- |
 | **Small** | 2 × 2 | What's next, at a glance. |
-| **Medium** | 4 × 2 | A few tasks, delete on each row. |
+| **Medium** | 4 × 2 | A few tasks, a ⋮ on each row. |
 | **Large** | 4 × 4 | Show/hide completed, clear completed, switch list. |
 | **Extra large** | 5 × 5 | Roomier rows and a progress bar. |
 
@@ -91,7 +105,8 @@ is read.
 No account, no analytics, no sync. Tasks live in one JSON file in app-private storage and never
 leave the device.
 
-**The app does not request `INTERNET`** — it could not phone home if it wanted to. The only
+**The app does not request `INTERNET`** — it could not phone home if it wanted to. A saved link is
+only stored as text; opening it hands it to your browser or the site's own app. The only
 permission written by app code is `RECEIVE_BOOT_COMPLETED`, so widgets survive a restart. The rest
 (`WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`) come from WorkManager, pulled in
 transitively by Glance.
@@ -110,7 +125,7 @@ are atomic read-modify-write, so two widgets tapping the same list cannot lose a
 app/src/main/java/com/simpletodo/
 ├── data/      models, JSON, DataStore, repository
 ├── ui/        home screen, dialogs, view model, theme
-├── quickadd/  the translucent "+" sheet
+├── quickadd/  the sheets over the home screen: quick add, task options, share
 └── widget/    Glance widgets, actions, sizing, config
 ```
 

@@ -109,10 +109,12 @@ class TodoRepository(
     /**
      * Adds a task at the top of the list so it is immediately visible even in the smallest widget.
      *
+     * A link in [title] (or an explicit [url]) is lifted out into [Task.url]; see [TaskLinks.split].
+     *
      * @return the new task id, or null when the input was empty or the list is full/missing.
      */
-    suspend fun addTask(listId: String, title: String): String? {
-        val cleaned = TodoJson.sanitizeTaskTitle(title)
+    suspend fun addTask(listId: String, title: String, url: String? = null): String? {
+        val (cleaned, link) = TaskLinks.split(title, url)
         if (cleaned.isEmpty()) return null
         var created: String? = null
         mutate { current ->
@@ -120,17 +122,35 @@ class TodoRepository(
             if (list.tasks.size >= TodoLimits.MAX_TASKS_PER_LIST) return@mutate current
             val id = newId()
             created = id
-            val task = Task(id = id, title = cleaned, createdAt = now())
+            val task = Task(id = id, title = cleaned, createdAt = now(), url = link)
             current.mapList(listId) { it.copy(tasks = listOf(task) + it.tasks) }
         }
         return created
     }
 
-    suspend fun editTask(listId: String, taskId: String, title: String) {
-        val cleaned = TodoJson.sanitizeTaskTitle(title)
-        if (cleaned.isEmpty()) return
-        mutate { current ->
-            current.mapTask(listId, taskId) { it.copy(title = cleaned) }
+    /** Retitles a task. A link pasted into a task that has none becomes its link. */
+    suspend fun editTask(listId: String, taskId: String, title: String) = mutate { current ->
+        current.mapTask(listId, taskId) { task ->
+            val (cleaned, link) = TaskLinks.split(title, task.url)
+            if (cleaned.isEmpty()) task else task.copy(title = cleaned, url = link)
+        }
+    }
+
+    /**
+     * Attaches, replaces or (with null) removes a task's link.
+     *
+     * A task still titled after its old link — a bare link that was saved without a label — is
+     * retitled after the new one, since the old title would now name a page it no longer opens.
+     */
+    suspend fun setTaskUrl(listId: String, taskId: String, url: String?) = mutate { current ->
+        val link = url?.let(TaskLinks::sanitize)
+        if (url != null && link == null) return@mutate current
+        current.mapTask(listId, taskId) { task ->
+            val titledAfterOldLink = task.url != null && task.title == TaskLinks.fallbackTitle(task.url)
+            task.copy(
+                url = link,
+                title = if (titledAfterOldLink && link != null) TaskLinks.fallbackTitle(link) else task.title,
+            )
         }
     }
 

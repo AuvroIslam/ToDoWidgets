@@ -95,10 +95,13 @@ abstract class TodoWidget(val kind: WidgetKind) : GlanceAppWidget() {
 
         claimPinHintIfUnbound(context, repository, appWidgetId)
 
+        // Read before composing, never inside: the first frame is the one that gets drawn (see
+        // WidgetRenderer), and starting from null made that frame "Loading…" on every single tap.
+        val initial = runCatching { repository.current() }.getOrNull()
+
         provideContent {
-            // Collected inside the composition, so a write from this widget re-renders it
-            // immediately rather than waiting for the round trip back through WidgetSync.
-            val snapshot by repository.snapshot.collectAsState(initial = null)
+            // Still collected, so a composition that stays alive keeps up with later writes.
+            val snapshot by repository.snapshot.collectAsState(initial = initial)
             GlanceTheme(colors = WidgetColors) {
                 TodoWidgetBody(
                     kind = kind,

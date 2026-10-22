@@ -13,6 +13,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.simpletodo.AppGraph
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "WidgetLinger"
@@ -33,7 +36,6 @@ object WidgetLinger {
     const val DURATION_MS = 4_000L
 
     private const val KEY_APP_WIDGET_ID = "appWidgetId"
-    private const val KEY_KIND = "widgetKind"
 
     /** The tasks still lingering on this widget at [now]. */
     fun lingering(prefs: Preferences?, now: Long): Set<String> {
@@ -64,17 +66,26 @@ object WidgetLinger {
     }
 
     /**
-     * Repaints the widget once the linger is over. A widget cannot run a timer of its own, and a
-     * delay inside the tap's callback would die with the broadcast that delivered it, so the
-     * repaint is handed to WorkManager — the same scheduler Glance itself renders through. One
-     * job per widget, replaced on every tick, so only the last tap's deadline counts.
+     * Puts the lingering tasks away once their time is up, in two ways at once.
+     *
+     * The timer in this process is the one that normally fires: it is on time to the frame, and
+     * a process that just handled a tap is not frozen for several seconds more. WorkManager is the
+     * backstop for a process killed in between — it cannot be the main path, because on phones
+     * that throttle background work its "4 seconds" can turn into minutes, leaving a ticked task
+     * sitting in its row. Whichever runs second finds nothing left to do. The job is unique per
+     * widget and replaced on every tick, so only the last tap's deadline counts.
      */
-    fun scheduleClear(context: Context, glanceId: GlanceId, kind: WidgetKind) {
+    fun scheduleClear(context: Context, glanceId: GlanceId) {
         val appWidgetId = TodoWidget.resolveAppWidgetId(context, glanceId)
         if (!TodoWidget.isRealWidget(appWidgetId)) return
+        val appContext = context.applicationContext
+        AppGraph.get(appContext).appScope.launch {
+            delay(DURATION_MS)
+            finish(appContext, appWidgetId)
+        }
         val request = OneTimeWorkRequestBuilder<WidgetLingerWorker>()
             .setInitialDelay(DURATION_MS, TimeUnit.MILLISECONDS)
-            .setInputData(workDataOf(KEY_APP_WIDGET_ID to appWidgetId, KEY_KIND to kind.key))
+            .setInputData(workDataOf(KEY_APP_WIDGET_ID to appWidgetId))
             .build()
         runCatching {
             WorkManager.getInstance(context)
@@ -82,7 +93,7 @@ object WidgetLinger {
         }.onFailure { Log.w(TAG, "Could not schedule linger clean-up", it) }
     }
 
-    internal suspend fun finish(context: Context, appWidgetId: Int, kind: WidgetKind) {
+    internal suspend fun finish(context: Context, appWidgetId: Int) {
         val glanceId = runCatching {
             GlanceAppWidgetManager(context).getGlanceIdBy(appWidgetId)
         }.getOrNull() ?: return
@@ -91,15 +102,12 @@ object WidgetLinger {
                 // A tick that landed after this job was queued has its own, later deadline.
                 if (lingering(prefs, System.currentTimeMillis()).isEmpty()) clear(prefs)
             }
-            widgetFor(kind).update(context, glanceId)
+            WidgetRenderer.render(context, listOf(appWidgetId))
         }.onFailure { Log.w(TAG, "Could not put lingering tasks away", it) }
     }
 
     internal fun appWidgetIdOf(params: WorkerParameters): Int =
         params.inputData.getInt(KEY_APP_WIDGET_ID, TodoWidget.INVALID_WIDGET_ID)
-
-    internal fun kindOf(params: WorkerParameters): WidgetKind =
-        WidgetKind.fromKey(params.inputData.getString(KEY_KIND))
 }
 
 /** Runs [WidgetLinger.finish] once a linger has run its course. */
@@ -111,7 +119,7 @@ class WidgetLingerWorker(
     override suspend fun doWork(): Result {
         val appWidgetId = WidgetLinger.appWidgetIdOf(params)
         if (TodoWidget.isRealWidget(appWidgetId)) {
-            WidgetLinger.finish(applicationContext, appWidgetId, WidgetLinger.kindOf(params))
+            WidgetLinger.finish(applicationContext, appWidgetId)
         }
         return Result.success()
     }

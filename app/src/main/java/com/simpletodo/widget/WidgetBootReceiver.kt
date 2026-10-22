@@ -29,7 +29,7 @@ class WidgetBootReceiver : BroadcastReceiver() {
         AppGraph.get(appContext).appScope.launch {
             try {
                 WidgetSync.reconcileBindings(appContext)
-                WidgetSync.updateAllWidgets(appContext)
+                WidgetRenderer.renderAll(appContext)
             } catch (e: Exception) {
                 Log.w(TAG, "Post-boot widget refresh failed", e)
             } finally {

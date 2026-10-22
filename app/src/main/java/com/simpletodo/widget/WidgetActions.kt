@@ -36,14 +36,18 @@ object WidgetParams {
     val APP_WIDGET_ID = ActionParameters.Key<Int>("appWidgetId")
 }
 
-private suspend fun refreshWidget(
-    context: Context,
-    glanceId: GlanceId,
-    parameters: ActionParameters,
-) {
-    val kind = WidgetKind.fromKey(parameters[WidgetParams.KIND])
-    runCatching { widgetFor(kind).update(context, glanceId) }
-        .onFailure { Log.w(TAG, "Could not refresh widget", it) }
+/**
+ * Redraws after a tap, before the callback returns.
+ *
+ * A widget tap is delivered by a broadcast (via an invisible trampoline activity in a list), and
+ * the process is only guaranteed to keep running until that broadcast finishes. Drawing here,
+ * rather than leaving it to a scheduled job, is what makes the tap show up straight away on a phone
+ * that holds background work back. Every widget is considered, since another widget may show the
+ * same list; the renderer skips the ones with nothing new to draw.
+ */
+private suspend fun redraw(context: Context) {
+    runCatching { WidgetRenderer.renderAll(context) }
+        .onFailure { Log.w(TAG, "Could not redraw widgets", it) }
 }
 
 private suspend fun editState(
@@ -73,19 +77,21 @@ class ToggleTaskAction : ActionCallback {
         val listId = parameters[WidgetParams.LIST_ID] ?: return
         val taskId = parameters[WidgetParams.TASK_ID] ?: return
         val repository = AppGraph.repository(context)
-        runCatching { repository.toggleTask(listId, taskId) }
-            .onFailure { Log.w(TAG, "Toggle failed", it) }
-        val nowDone = runCatching {
-            repository.current().listById(listId)?.tasks?.firstOrNull { it.id == taskId }?.isDone
-        }.getOrNull() ?: false
+        val task = runCatching {
+            repository.current().listById(listId)?.tasks?.firstOrNull { it.id == taskId }
+        }.getOrNull() ?: return
+        val nowDone = !task.isDone
 
+        // The linger is recorded *before* the write. The write wakes the app-wide redraw as well,
+        // and if that redraw saw the ticked task without its linger it would drop the row into
+        // "completed" for a frame, only for this callback's redraw to put it back.
         editState(context, glanceId) { prefs ->
             WidgetLinger.record(prefs, taskId, nowDone, System.currentTimeMillis())
         }
-        if (nowDone) {
-            WidgetLinger.scheduleClear(context, glanceId, WidgetKind.fromKey(parameters[WidgetParams.KIND]))
-        }
-        refreshWidget(context, glanceId, parameters)
+        runCatching { repository.toggleTask(listId, taskId) }
+            .onFailure { Log.w(TAG, "Toggle failed", it) }
+        if (nowDone) WidgetLinger.scheduleClear(context, glanceId)
+        redraw(context)
     }
 }
 
@@ -99,7 +105,7 @@ class ToggleShowCompletedAction : ActionCallback {
             prefs[WidgetPrefs.SHOW_COMPLETED] =
                 !(prefs[WidgetPrefs.SHOW_COMPLETED] ?: WidgetPrefs.SHOW_COMPLETED_DEFAULT)
         }
-        refreshWidget(context, glanceId, parameters)
+        redraw(context)
     }
 }
 
@@ -112,7 +118,7 @@ class ClearCompletedAction : ActionCallback {
         val listId = parameters[WidgetParams.LIST_ID] ?: return
         runCatching { AppGraph.repository(context).clearCompleted(listId) }
             .onFailure { Log.w(TAG, "Clear completed failed", it) }
-        refreshWidget(context, glanceId, parameters)
+        redraw(context)
     }
 }
 
@@ -123,6 +129,6 @@ class RefreshWidgetAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
-        refreshWidget(context, glanceId, parameters)
+        redraw(context)
     }
 }

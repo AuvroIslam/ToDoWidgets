@@ -140,7 +140,7 @@ class WidgetConfigActivity : ComponentActivity() {
     private fun confirm(listId: String) {
         lifecycleScope.launch {
             AppGraph.repository(this@WidgetConfigActivity).bindWidget(appWidgetId, listId)
-            WidgetSync.updateAllWidgets(this@WidgetConfigActivity)
+            WidgetRenderer.renderAll(this@WidgetConfigActivity)
             setResult(RESULT_OK, resultIntent())
             finish()
         }

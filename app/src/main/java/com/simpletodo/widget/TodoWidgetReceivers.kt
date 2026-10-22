@@ -3,31 +3,79 @@ package com.simpletodo.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.updateAll
 import com.simpletodo.AppGraph
 import kotlinx.coroutines.launch
 
 private const val TAG = "TodoWidgetReceivers"
 
 /**
- * Base receiver that nudges Glance to render as soon as the first widget of this size is enabled.
- * Some Samsung/One UI launchers do not send a follow-up APPWIDGET_UPDATE after the picker places
- * the widget, so the first composition can sit on the loading placeholder until something else
- * pokes it. Pushing one update from onEnabled covers that gap.
+ * The widget provider. Draws on the spot for every system request rather than through Glance.
+ *
+ * Glance's receiver turns `onUpdate` and `onAppWidgetOptionsChanged` into WorkManager jobs, and a
+ * throttled phone may run those late — a freshly placed or freshly resized widget would sit on its
+ * old layout, or Glance's loading placeholder, until then. [WidgetRenderer] draws inside the
+ * broadcast instead, which the system lets run to completion. Some Samsung/One UI launchers also
+ * never send an update after the picker places a widget; `onEnabled` covers that.
  */
 abstract class TodoWidgetReceiver(private val kind: WidgetKind) : GlanceAppWidgetReceiver() {
 
     override val glanceAppWidget: GlanceAppWidget = widgetFor(kind)
 
+    override fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        draw(context, appWidgetIds.toList())
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle,
+    ) {
+        draw(context, listOf(appWidgetId))
+    }
+
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
+        draw(context, WidgetSync.liveWidgetIds(context))
+    }
+
+    /** Glance still cleans up its own per-widget state; the binding is released here, at once. */
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        val ids = appWidgetIds.toList()
+        WidgetRenderer.forget(ids)
         val appContext = context.applicationContext
+        val pending = goAsync()
         AppGraph.get(appContext).appScope.launch {
-            runCatching { widgetFor(kind).updateAll(appContext) }
-                .onFailure { Log.w(TAG, "onEnabled update failed for $kind", it) }
+            try {
+                AppGraph.repository(appContext).unbindWidgets(ids)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not release bindings for $ids", e)
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+
+    private fun draw(context: Context, appWidgetIds: Collection<Int>) {
+        val appContext = context.applicationContext
+        val pending = goAsync()
+        AppGraph.get(appContext).appScope.launch {
+            try {
+                WidgetRenderer.render(appContext, appWidgetIds)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not draw $kind widgets $appWidgetIds", e)
+            } finally {
+                pending.finish()
+            }
         }
     }
 }
@@ -40,17 +88,10 @@ class LargeTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.LARGE)
 
 class XLargeTodoWidgetReceiver : TodoWidgetReceiver(WidgetKind.XLARGE)
 
-/**
- * Pushes the current state to every widget instance.
- *
- * Called after every write. `updateAll` restarts a session for widgets whose process was killed,
- * which is the mechanism that makes the widget correct again after a device restart or a
- * low-memory kill — collecting a flow inside a live composition only covers the easy case.
- */
 object WidgetSync {
 
-    /** Bursts of writes (rapid adds, tapping through several tasks) collapse into one update. */
-    const val COALESCE_MS = 90L
+    /** Bursts of writes (rapid adds, tapping through several tasks) collapse into one redraw. */
+    const val COALESCE_MS = 50L
 
     private val receivers = listOf(
         SmallTodoWidgetReceiver::class.java,
@@ -58,13 +99,6 @@ object WidgetSync {
         LargeTodoWidgetReceiver::class.java,
         XLargeTodoWidgetReceiver::class.java,
     )
-
-    suspend fun updateAllWidgets(context: Context) {
-        for (kind in WidgetKind.entries) {
-            runCatching { widgetFor(kind).updateAll(context) }
-                .onFailure { Log.w(TAG, "Update failed for ${kind.key} widgets", it) }
-        }
-    }
 
     /** Every app widget id currently known to the launcher, across all four providers. */
     fun liveWidgetIds(context: Context): Set<Int> {

@@ -2,6 +2,7 @@ package com.simpletodo
 
 import android.app.Application
 import android.util.Log
+import com.simpletodo.widget.WidgetRenderer
 import com.simpletodo.widget.WidgetSync
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
@@ -22,15 +23,16 @@ class TodoApplication : Application() {
             WidgetSync.reconcileBindings(this@TodoApplication)
         }
 
-        // Every write pushes a refresh to all widgets. `conflate` plus the short settle delay
-        // collapses bursts (e.g. adding five tasks in a row) into a single widget update, while
-        // still guaranteeing the *last* state is always rendered.
+        // Every write redraws the widgets, here and now (see WidgetRenderer for why not through
+        // Glance's update). `conflate` plus the short settle delay collapses bursts — adding five
+        // tasks in a row — into one redraw, while still guaranteeing the *last* state is drawn.
         container.appScope.launch {
             container.repository.changes
                 .conflate()
                 .collect {
                     kotlinx.coroutines.delay(WidgetSync.COALESCE_MS)
-                    WidgetSync.updateAllWidgets(this@TodoApplication)
+                    runCatching { WidgetRenderer.renderAll(this@TodoApplication) }
+                        .onFailure { Log.w(TAG, "Widget redraw failed", it) }
                 }
         }
     }

@@ -31,7 +31,7 @@ android {
         targetSdk = 36
         // Play refuses a second upload at the same code, so any build meant to replace what is
         // already up there has to move past it.
-        versionCode = 4
+        versionCode = 6
         versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

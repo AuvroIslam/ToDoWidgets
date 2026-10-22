@@ -259,6 +259,17 @@ private fun ReadyState(
                 doneCount = completed.size,
                 accentIndex = list.accent,
             )
+        } else if (STATIC_ROWS) {
+            StaticRows(
+                visible = visible,
+                capacity = rowCapacity(spec, LocalSize.current.height, list),
+                list = list,
+                kind = kind,
+                appWidgetId = appWidgetId,
+                spec = spec,
+                interactive = interactive,
+                modifier = GlanceModifier.fillMaxSize().defaultWeight(),
+            )
         } else {
             // Every size scrolls, including the 2x2. A widget is a fixed window onto a list that
             // is not: capping the rows to whatever happened to fit meant the tasks past the cap
@@ -291,6 +302,82 @@ private fun ReadyState(
                 showCompleted = showCompleted,
             )
         }
+        }
+    }
+}
+
+/**
+ * Android 11 and older draw a widget's scrolling list through a RemoteViewsService, and Glance's
+ * service will not hand over the rows until it has started a full session of its own — through
+ * WorkManager, the very scheduler that throttled phones hold back. The list would sit blank there
+ * until the job ran. So on those versions the rows are drawn inline instead, as part of the widget
+ * itself, and arrive with everything else. Android 12 and later carry the rows inline even in a
+ * scrolling list, so they keep the scroll.
+ */
+private val STATIC_ROWS = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+
+/** Glance lays out at most ten children in a Column; one of them may be the "+N more" line. */
+private const val MAX_STATIC_ROWS = 8
+
+/**
+ * How many rows fit under the header, counts line, progress bar and footer of a widget this tall.
+ * Erring low only costs a "+N more" line a row early; erring high would clip a row in half.
+ */
+private fun rowCapacity(spec: WidgetSpec, height: Dp, list: TodoList): Int {
+    val compact = spec.layout == WidgetLayout.COMPACT
+    val header = if (compact) 38.dp else 52.dp
+    val bodyPadding = 16.dp
+    val countsLine = if (compact) 0.dp else 19.dp
+    val progress = if (spec.layout == WidgetLayout.PANEL) 12.dp else 0.dp
+    val footer = if (spec.showFooter && list.doneCount > 0) 38.dp else 0.dp
+    val room = height - header - bodyPadding - countsLine - progress - footer
+    return (room.value / (spec.rowHeight.value + 2f)).toInt().coerceIn(1, MAX_STATIC_ROWS)
+}
+
+@Composable
+private fun StaticRows(
+    visible: List<Task>,
+    capacity: Int,
+    list: TodoList,
+    kind: WidgetKind,
+    appWidgetId: Int,
+    spec: WidgetSpec,
+    interactive: Boolean,
+    modifier: GlanceModifier,
+) {
+    val context = LocalContext.current
+    val shown = if (visible.size <= capacity) visible else visible.take(capacity - 1)
+    Column(modifier = modifier) {
+        shown.forEach { task ->
+            Column {
+                TaskRow(
+                    task = task,
+                    listId = list.id,
+                    accentIndex = list.accent,
+                    kind = kind,
+                    appWidgetId = appWidgetId,
+                    spec = spec,
+                    interactive = interactive,
+                )
+                Spacer(GlanceModifier.height(2.dp))
+            }
+        }
+        val hidden = visible.size - shown.size
+        if (hidden > 0) {
+            Text(
+                text = "+$hidden more",
+                maxLines = 1,
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .clickableIf(interactive, actionStartActivity(MainActivity.listIntent(context, list.id)))
+                    .semantics { contentDescription = "$hidden more tasks. Open list." },
+                style = TextStyle(
+                    color = accentText(list.accent),
+                    fontSize = spec.taskSize,
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
         }
     }
 }

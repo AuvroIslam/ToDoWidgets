@@ -65,12 +65,14 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.simpletodo.AppGraph
+import com.simpletodo.data.Task
 import com.simpletodo.data.TodoLimits
 import com.simpletodo.ui.LinkDialog
 import com.simpletodo.ui.copyToClipboard
 import com.simpletodo.ui.openLink
 import com.simpletodo.ui.theme.SimpleTodoTheme
 import com.simpletodo.ui.theme.TodoAccents
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -98,10 +100,14 @@ class TaskOptionsActivity : ComponentActivity() {
             SimpleTodoTheme {
                 val snapshot by repository.snapshot.collectAsStateWithLifecycle(initialValue = null)
                 val list = snapshot?.listById(listId)
-                val task = list?.tasks?.firstOrNull { it.id == taskId }
+                val liveTask = list?.tasks?.firstOrNull { it.id == taskId }
 
                 val sheet = rememberSheetState()
                 val view = LocalView.current
+
+                // The task this sheet just deleted, and where it sat, kept so it can be put back.
+                var deleted by remember { mutableStateOf<Pair<Task, Int>?>(null) }
+                val task = liveTask ?: deleted?.first
 
                 // Deleted elsewhere (the app, another widget) between the tap and the sheet.
                 LaunchedEffect(snapshot, task) {
@@ -166,7 +172,20 @@ class TaskOptionsActivity : ComponentActivity() {
                                             Icons.Rounded.DeleteOutline,
                                             "Delete",
                                             tint = MaterialTheme.colorScheme.error,
-                                        ) { mode = SheetMode.CONFIRM_DELETE }
+                                        ) {
+                                            // Deleted at once, with the way back offered in the
+                                            // same place — the app's delete-then-undo, not a
+                                            // question asked before every delete.
+                                            val index = list.tasks.indexOfFirst { it.id == task.id }
+                                            deleted = task to index
+                                            lifecycleScope.launch {
+                                                repository.deleteTask(list.id, task.id)
+                                                view.confirmHaptic()
+                                                mode = SheetMode.DELETED
+                                                delay(UNDO_WINDOW_MS)
+                                                if (mode == SheetMode.DELETED) sheet.dismiss()
+                                            }
+                                        }
                                     }
 
                                     SheetMode.EDIT -> EditTitle(
@@ -176,9 +195,12 @@ class TaskOptionsActivity : ComponentActivity() {
                                         onSave = { title -> commit { repository.editTask(list.id, task.id, title) } },
                                     )
 
-                                    SheetMode.CONFIRM_DELETE -> ConfirmDelete(
-                                        onCancel = { mode = SheetMode.MENU },
-                                        onDelete = { commit { repository.deleteTask(list.id, task.id) } },
+                                    SheetMode.DELETED -> Deleted(
+                                        onUndo = {
+                                            val (gone, index) = deleted ?: return@Deleted
+                                            mode = SheetMode.MENU
+                                            commit { repository.restoreTask(list.id, gone, index) }
+                                        },
                                     )
                                 }
                             }
@@ -206,6 +228,11 @@ class TaskOptionsActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) redrawWidgetsAfterClose()
+    }
+
     /** The sheet closes on a copy, so on Android 12 and older the confirmation is a toast. */
     private fun copy(text: String, sheet: SheetState) {
         if (copyToClipboard(this, text)) toast("Copied")
@@ -216,11 +243,14 @@ class TaskOptionsActivity : ComponentActivity() {
         Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 
-    private enum class SheetMode { MENU, EDIT, LINK, CONFIRM_DELETE }
+    private enum class SheetMode { MENU, EDIT, LINK, DELETED }
 
     companion object {
         const val EXTRA_LIST_ID = "com.simpletodo.extra.LIST_ID"
         const val EXTRA_TASK_ID = "com.simpletodo.extra.TASK_ID"
+
+        /** How long "Task deleted · Undo" stays up before the sheet closes on its own. */
+        private const val UNDO_WINDOW_MS = 6_000L
 
         /**
          * One distinct [Intent.setData] per widget and task: rows in a widget list share a single
@@ -240,7 +270,7 @@ class TaskOptionsActivity : ComponentActivity() {
 object TaskOptionsTags {
     const val SHEET = "task_options_sheet"
     const val EDIT_FIELD = "task_options_edit_field"
-    const val CONFIRM_DELETE = "task_options_confirm_delete"
+    const val UNDO = "task_options_undo"
 }
 
 @Composable
@@ -338,31 +368,21 @@ private fun EditTitle(
     }
 }
 
-/**
- * Deleting from a widget has no snackbar to undo it from, so it keeps the widget's old two-step
- * guard: the menu item only asks, and this is the explicit confirmation.
- */
+/** What replaces the menu once the task is gone: says so, and offers the way back. */
 @Composable
-private fun ConfirmDelete(onCancel: () -> Unit, onDelete: () -> Unit) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+private fun Deleted(onUndo: () -> Unit) {
+    Row(
+        modifier = Modifier.padding(start = 20.dp, end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            text = "Delete this task? This can't be undone.",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Task deleted",
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onCancel) { Text("Cancel") }
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = onDelete,
-                modifier = Modifier.testTag(TaskOptionsTags.CONFIRM_DELETE),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError,
-                ),
-            ) { Text("Delete") }
+        TextButton(onClick = onUndo, modifier = Modifier.testTag(TaskOptionsTags.UNDO)) {
+            Text("Undo")
         }
     }
 }

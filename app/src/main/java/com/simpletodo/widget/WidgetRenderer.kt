@@ -38,11 +38,17 @@ object WidgetRenderer {
     /** What each widget was last drawn from. Process-local: a fresh process simply redraws. */
     private val lastDrawn = HashMap<Int, List<Any?>>()
 
-    suspend fun renderAll(context: Context) {
-        render(context, WidgetSync.liveWidgetIds(context))
+    suspend fun renderAll(context: Context, force: Boolean = false) {
+        render(context, WidgetSync.liveWidgetIds(context), force)
     }
 
-    suspend fun render(context: Context, appWidgetIds: Collection<Int>) {
+    /**
+     * @param force draw even when nothing this widget shows has changed. Required whenever the
+     *   *system* asks for a draw: the launcher may have thrown its copy of the widget away (a
+     *   package change makes some launchers re-inflate every widget from its loading layout), and
+     *   only a fresh draw brings it back.
+     */
+    suspend fun render(context: Context, appWidgetIds: Collection<Int>, force: Boolean = false) {
         if (appWidgetIds.isEmpty()) return
         val appContext = context.applicationContext
         mutex.withLock {
@@ -55,7 +61,7 @@ object WidgetRenderer {
             coroutineScope {
                 appWidgetIds.filter(TodoWidget::isRealWidget).forEach { appWidgetId ->
                     launch {
-                        runCatching { renderOne(appContext, manager, glanceManager, appWidgetId) }
+                        runCatching { renderOne(appContext, manager, glanceManager, appWidgetId, force) }
                             .onFailure { Log.w(TAG, "Could not draw widget $appWidgetId", it) }
                     }
                 }
@@ -74,6 +80,7 @@ object WidgetRenderer {
         manager: AppWidgetManager,
         glanceManager: GlanceAppWidgetManager,
         appWidgetId: Int,
+        force: Boolean,
     ) {
         val provider = manager.getAppWidgetInfo(appWidgetId)?.provider ?: return
         val kind = WidgetKind.entries.firstOrNull {
@@ -90,11 +97,14 @@ object WidgetRenderer {
         val inputs = listOf(
             shows,
             state,
+            // The linger runs out with time, not with a write: without this an expired one
+            // looked "unchanged" and its row stayed where it was until something else changed.
+            WidgetLinger.lingering(state, System.currentTimeMillis()),
             describe(options),
             context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK,
             context.resources.configuration.locales.toLanguageTags(),
         )
-        if (synchronized(lastDrawn) { lastDrawn[appWidgetId] } == inputs) return
+        if (!force && synchronized(lastDrawn) { lastDrawn[appWidgetId] } == inputs) return
 
         val views = widgetFor(kind).compose(context, glanceId, options = options, state = state)
         manager.updateAppWidget(appWidgetId, views)

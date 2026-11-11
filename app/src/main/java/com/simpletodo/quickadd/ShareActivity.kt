@@ -122,10 +122,13 @@ class ShareActivity : ComponentActivity() {
                 var saved by remember { mutableStateOf(false) }
                 var error by remember { mutableStateOf<String?>(null) }
 
-                LaunchedEffect(lists) {
+                LaunchedEffect(snapshot != null, lists) {
                     if (lists.isNotEmpty() && lists.none { it.id == activeListId }) {
                         activeListId = lists.first().id
                     }
+                    // Sharing into an app with no lists used to end in "open the app to create
+                    // one". The thing being saved needs somewhere to go, so it is given one.
+                    if (snapshot != null && lists.isEmpty()) repository.createList("Personal")
                 }
 
                 val activeList = lists.firstOrNull { it.id == activeListId }
@@ -163,6 +166,11 @@ class ShareActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) redrawWidgetsAfterClose()
     }
 
     private companion object {

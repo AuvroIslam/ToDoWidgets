@@ -117,7 +117,7 @@ data class WidgetSpec(
             outerPadding = 12.dp,
             titleSize = 16.sp,
             taskSize = 14.sp,
-            taskMaxLines = 1,
+            taskMaxLines = 2,
         )
 
         /** 4x4. A list you actually work from: shows completed, and has the list controls. */
@@ -133,7 +133,7 @@ data class WidgetSpec(
             outerPadding = 12.dp,
             titleSize = 17.sp,
             taskSize = 14.sp,
-            taskMaxLines = 1,
+            taskMaxLines = 2,
         )
 
         /** Full width and tall. Same tools, but roomy: two-line titles and a progress bar. */

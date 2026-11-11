@@ -27,6 +27,9 @@ object WidgetPrefs {
     /** Tasks ticked here a moment ago, still drawn in their own rows. See [WidgetLinger]. */
     val JUST_DONE = stringSetPreferencesKey("just_done_task_ids")
     val JUST_DONE_UNTIL = longPreferencesKey("just_done_until")
+
+    /** The footer is asking "delete completed?" — the broom's first tap. Any other tap cancels. */
+    val CONFIRM_CLEAR = booleanPreferencesKey("confirm_clear_completed")
 }
 
 object WidgetParams {
@@ -80,17 +83,27 @@ class ToggleTaskAction : ActionCallback {
         val task = runCatching {
             repository.current().listById(listId)?.tasks?.firstOrNull { it.id == taskId }
         }.getOrNull() ?: return
-        val nowDone = !task.isDone
+        val expected = !task.isDone
 
         // The linger is recorded *before* the write. The write wakes the app-wide redraw as well,
         // and if that redraw saw the ticked task without its linger it would drop the row into
         // "completed" for a frame, only for this callback's redraw to put it back.
         editState(context, glanceId) { prefs ->
-            WidgetLinger.record(prefs, taskId, nowDone, System.currentTimeMillis())
+            prefs.remove(WidgetPrefs.CONFIRM_CLEAR)
+            WidgetLinger.record(prefs, taskId, expected, System.currentTimeMillis())
         }
-        runCatching { repository.toggleTask(listId, taskId) }
+        val nowDone = runCatching { repository.toggleTask(listId, taskId) }
             .onFailure { Log.w(TAG, "Toggle failed", it) }
-        if (nowDone) WidgetLinger.scheduleClear(context, glanceId)
+            .getOrNull()
+        // Two taps in quick succession both read the task before either wrote, and so both
+        // expected the same outcome. The write is the only thing that knows which way each one
+        // really went; where it disagrees, the linger is put right.
+        if (nowDone != null && nowDone != expected) {
+            editState(context, glanceId) { prefs ->
+                WidgetLinger.record(prefs, taskId, nowDone, System.currentTimeMillis())
+            }
+        }
+        if (nowDone == true) WidgetLinger.scheduleClear(context, glanceId)
         redraw(context)
     }
 }
@@ -104,18 +117,43 @@ class ToggleShowCompletedAction : ActionCallback {
         editState(context, glanceId) { prefs ->
             prefs[WidgetPrefs.SHOW_COMPLETED] =
                 !(prefs[WidgetPrefs.SHOW_COMPLETED] ?: WidgetPrefs.SHOW_COMPLETED_DEFAULT)
+            prefs.remove(WidgetPrefs.CONFIRM_CLEAR)
         }
         redraw(context)
     }
 }
 
+/** The broom's first tap: deletes nothing, turns the footer into "Delete N completed?". */
 class ClearCompletedAction : ActionCallback {
     override suspend fun onAction(
         context: Context,
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
+        editState(context, glanceId) { it[WidgetPrefs.CONFIRM_CLEAR] = true }
+        redraw(context)
+    }
+}
+
+class CancelClearCompletedAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
+        editState(context, glanceId) { it.remove(WidgetPrefs.CONFIRM_CLEAR) }
+        redraw(context)
+    }
+}
+
+class ConfirmClearCompletedAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters,
+    ) {
         val listId = parameters[WidgetParams.LIST_ID] ?: return
+        editState(context, glanceId) { it.remove(WidgetPrefs.CONFIRM_CLEAR) }
         runCatching { AppGraph.repository(context).clearCompleted(listId) }
             .onFailure { Log.w(TAG, "Clear completed failed", it) }
         redraw(context)

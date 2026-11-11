@@ -1,5 +1,6 @@
 package com.simpletodo.widget
 
+import android.annotation.SuppressLint
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -25,6 +26,10 @@ abstract class TodoWidgetReceiver(private val kind: WidgetKind) : GlanceAppWidge
 
     override val glanceAppWidget: GlanceAppWidget = widgetFor(kind)
 
+    // No super call, here or in onAppWidgetOptionsChanged: Glance's version only queues the
+    // WorkManager render this receiver exists to avoid (and records bookkeeping for updateAll and
+    // getGlanceIds, neither of which the app uses). WidgetRenderer draws instead.
+    @SuppressLint("MissingSuperCall")
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -33,6 +38,7 @@ abstract class TodoWidgetReceiver(private val kind: WidgetKind) : GlanceAppWidge
         draw(context, appWidgetIds.toList())
     }
 
+    @SuppressLint("MissingSuperCall")
     override fun onAppWidgetOptionsChanged(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -70,7 +76,11 @@ abstract class TodoWidgetReceiver(private val kind: WidgetKind) : GlanceAppWidge
         val pending = goAsync()
         AppGraph.get(appContext).appScope.launch {
             try {
-                WidgetRenderer.render(appContext, appWidgetIds)
+                // The half-hourly system update doubles as the morning-reset check for a
+                // process nothing else has woken since yesterday.
+                DailyResetRunner.run(appContext)
+                // The system asked, so its copy may be gone: always a real draw.
+                WidgetRenderer.render(appContext, appWidgetIds, force = true)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not draw $kind widgets $appWidgetIds", e)
             } finally {

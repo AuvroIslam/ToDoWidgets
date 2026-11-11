@@ -47,9 +47,9 @@ I kept installing to-do apps and kept uninstalling them for the same three reaso
 | --- | --- |
 | **Add** | Tap `+`. A sheet slides up over the home screen, keyboard ready. The app never appears. |
 | **Complete** | Tap the row. It stays put, struck through, for a few seconds — tap again if that was a mistake. |
-| **Edit, link, copy, delete** | Tap `⋮` on the row. Same options as in the app; deleting asks first. |
-| **Scroll** | Every size scrolls, down to the 2 × 2. Nothing is stranded off the bottom. |
-| **Show / clear** completed | Shown by default. Eye hides them, broom clears them. |
+| **Edit, link, copy, delete** | Tap `⋮` on the row. Same options as in the app; a delete can be undone for a few seconds. |
+| **Scroll** | When a list is longer than the widget, it scrolls (Android 12+; older versions show what fits and a "+N more" link). |
+| **Show / clear** completed | Shown by default. Eye hides them; broom clears them, and asks first. |
 | **Switch list** | Tap the swap icon. |
 
 ![No need to open the app](githubimages/widget_from_home.png)
@@ -64,6 +64,8 @@ I kept installing to-do apps and kept uninstalling them for the same three reaso
 - **Type and send.** The input sits at the bottom, always in reach.
 - **Multiple lists**, each with its own colour.
 - **Edit, copy or add a link** from any task's ⋮ menu.
+- **Lists that reset every morning.** Switch it on for a routine — medicines, habits, a morning checklist — and its ticked tasks untick themselves overnight. Nothing is deleted.
+- **Paste a list, get a task per line.** A shopping list copied from a chat becomes separate tasks, and the app says so before you send.
 - **Drag to reorder**, **undo** any delete.
 - **Light / Dark / System**, in the ⋮ menu.
 - No accounts, no onboarding, no sync setup.

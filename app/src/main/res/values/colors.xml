@@ -7,4 +7,9 @@
     -->
     <color name="ic_launcher_background">#FCBA15</color>
     <color name="window_background">#FFFFFF</color>
+
+    <!-- The pre-draw widget placeholder (layout/widget_initial). Matches the widget surface. -->
+    <color name="widget_initial_surface">#F7F8FC</color>
+    <color name="widget_initial_text">#1B1B1F</color>
+    <color name="widget_initial_hint">#5E6068</color>
 </resources>

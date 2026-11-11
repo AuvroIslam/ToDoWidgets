@@ -10,7 +10,7 @@
     android:maxResizeHeight="860dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:initialLayout="@layout/widget_initial"
     android:previewImage="@drawable/widget_shot_large"
     android:description="@string/widget_large_description"
     android:configure="com.simpletodo.widget.WidgetConfigActivity"

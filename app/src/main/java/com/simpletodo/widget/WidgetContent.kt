@@ -88,6 +88,7 @@ fun TodoWidgetBody(
     val prefs = if (interactive) LocalState.current as? Preferences else null
     val showCompleted = prefs?.get(WidgetPrefs.SHOW_COMPLETED) ?: WidgetPrefs.SHOW_COMPLETED_DEFAULT
     val justDone = WidgetLinger.lingering(prefs, System.currentTimeMillis())
+    val confirmClear = prefs?.get(WidgetPrefs.CONFIRM_CLEAR) ?: false
 
     // The padding lives inside each state rather than on this Box: the ready state's header is a
     // colour band that has to run edge to edge, right up under the widget's rounded corners.
@@ -115,6 +116,7 @@ fun TodoWidgetBody(
                 interactive = interactive,
                 showCompleted = showCompleted,
                 justDone = justDone,
+                confirmClear = confirmClear,
             )
         }
     }
@@ -228,6 +230,7 @@ private fun ReadyState(
     interactive: Boolean,
     showCompleted: Boolean,
     justDone: Set<String>,
+    confirmClear: Boolean,
 ) {
     val context = LocalContext.current
     val addAction = actionStartActivity(
@@ -259,7 +262,11 @@ private fun ReadyState(
                 doneCount = completed.size,
                 accentIndex = list.accent,
             )
-        } else if (STATIC_ROWS) {
+        } else if (STATIC_ROWS || visible.size <= rowCapacity(spec, LocalSize.current.height, list)) {
+            // Plain rows whenever the tasks fit, on every Android version. A tap on a row inside
+            // a scrolling list is delivered by first launching Glance's invisible trampoline
+            // activity, and an activity launch is the slowest thing a low-end phone does; a plain
+            // row's tap is a direct broadcast. The scrolling list is kept for when it is needed.
             StaticRows(
                 visible = visible,
                 capacity = rowCapacity(spec, LocalSize.current.height, list),
@@ -300,6 +307,7 @@ private fun ReadyState(
                 spec = spec,
                 interactive = interactive,
                 showCompleted = showCompleted,
+                confirmClear = confirmClear,
             )
         }
         }
@@ -310,9 +318,9 @@ private fun ReadyState(
  * Android 11 and older draw a widget's scrolling list through a RemoteViewsService, and Glance's
  * service will not hand over the rows until it has started a full session of its own — through
  * WorkManager, the very scheduler that throttled phones hold back. The list would sit blank there
- * until the job ran. So on those versions the rows are drawn inline instead, as part of the widget
- * itself, and arrive with everything else. Android 12 and later carry the rows inline even in a
- * scrolling list, so they keep the scroll.
+ * until the job ran. So on those versions the rows are *always* drawn inline, as part of the
+ * widget itself, with a "+N more" line when they do not all fit. Android 12 and later carry the
+ * rows inline even in a scrolling list, so there the scroll is used once the tasks overflow.
  */
 private val STATIC_ROWS = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
 
@@ -325,11 +333,11 @@ private const val MAX_STATIC_ROWS = 8
  */
 private fun rowCapacity(spec: WidgetSpec, height: Dp, list: TodoList): Int {
     val compact = spec.layout == WidgetLayout.COMPACT
-    val header = if (compact) 38.dp else 52.dp
+    val header = headerButtonSize(spec) + 8.dp
     val bodyPadding = 16.dp
     val countsLine = if (compact) 0.dp else 19.dp
     val progress = if (spec.layout == WidgetLayout.PANEL) 12.dp else 0.dp
-    val footer = if (spec.showFooter && list.doneCount > 0) 38.dp else 0.dp
+    val footer = if (spec.showFooter && list.doneCount > 0) FOOTER_BUTTON + 6.dp else 0.dp
     val room = height - header - bodyPadding - countsLine - progress - footer
     return (room.value / (spec.rowHeight.value + 2f)).toInt().coerceIn(1, MAX_STATIC_ROWS)
 }
@@ -505,7 +513,9 @@ private fun WidgetHeader(
         modifier = GlanceModifier
             .fillMaxWidth()
             .background(accent)
-            .padding(horizontal = spec.outerPadding, vertical = if (compact) 5.dp else 7.dp),
+            // The band's height comes from its buttons now, not from padding around small ones:
+            // "+" is the widget's main action and was a 33dp target.
+            .padding(start = spec.outerPadding, end = spec.outerPadding - 6.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
@@ -537,7 +547,8 @@ private fun WidgetHeader(
                 icon = R.drawable.ic_widget_swap,
                 label = "Change the list this widget shows",
                 action = actionStartActivity(WidgetConfigActivity.intent(context, appWidgetId)),
-                size = spec.controlSize * 0.72f,
+                size = headerButtonSize(spec),
+                iconScale = 0.46f,
                 tint = accentInk,
                 testTag = WidgetTags.CHANGE_LIST,
                 interactive = interactive,
@@ -549,7 +560,8 @@ private fun WidgetHeader(
             icon = R.drawable.ic_widget_add,
             label = "Add a task to ${list.name}",
             action = addAction,
-            size = if (compact) 28.dp else spec.controlSize * 0.72f,
+            size = headerButtonSize(spec),
+            iconScale = if (compact) 0.5f else 0.46f,
             tint = accentInk,
             testTag = WidgetTags.ADD,
             interactive = interactive,
@@ -557,7 +569,16 @@ private fun WidgetHeader(
     }
 }
 
-private fun subtitleFor(list: TodoList): String = when {
+/** Both header buttons: a full-size target on every layout but the 2x2, which has no room. */
+private fun headerButtonSize(spec: WidgetSpec): Dp =
+    if (spec.layout == WidgetLayout.COMPACT) 36.dp else 46.dp
+
+private val FOOTER_BUTTON = 40.dp
+
+private fun subtitleFor(list: TodoList): String = countsFor(list) +
+    if (list.resetsDaily) " · resets every morning" else ""
+
+private fun countsFor(list: TodoList): String = when {
     list.tasks.isEmpty() -> "No tasks yet"
     list.activeCount == 0 -> "All ${list.doneCount} done"
     else -> "${list.activeCount} left · ${list.doneCount} done"
@@ -639,8 +660,8 @@ private fun TaskRow(
                 action = actionStartActivity(
                     TaskOptionsActivity.intent(context, listId, task.id, appWidgetId),
                 ),
-                size = spec.controlSize * 0.86f,
-                iconScale = 0.5f,
+                size = spec.controlSize,
+                iconScale = 0.44f,
                 tint = GlanceTheme.colors.onSurfaceVariant,
                 testTag = WidgetTags.more(task.id),
                 interactive = interactive,
@@ -722,12 +743,46 @@ private fun WidgetFooter(
     spec: WidgetSpec,
     interactive: Boolean,
     showCompleted: Boolean,
+    confirmClear: Boolean,
 ) {
     val params = actionParametersOf(
         WidgetParams.LIST_ID to list.id,
         WidgetParams.KIND to kind.key,
     )
     Spacer(GlanceModifier.height(4.dp))
+    if (confirmClear) {
+        // The broom deletes every completed task at once and the widget has nowhere to offer an
+        // undo, so its first tap only asks. The answer sits where the question was.
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().height(FOOTER_BUTTON)
+                .semantics { testTag = WidgetTags.FOOTER },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Delete ${list.doneCount} completed?",
+                maxLines = 1,
+                modifier = GlanceModifier.defaultWeight(),
+                style = TextStyle(
+                    color = GlanceTheme.colors.onSurface,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
+            TextAction(
+                label = "Keep",
+                color = GlanceTheme.colors.onSurfaceVariant,
+                action = actionRunCallback<CancelClearCompletedAction>(params),
+                interactive = interactive,
+            )
+            TextAction(
+                label = "Delete",
+                color = GlanceTheme.colors.error,
+                action = actionRunCallback<ConfirmClearCompletedAction>(params),
+                interactive = interactive,
+            )
+        }
+        return
+    }
     Row(
         modifier = GlanceModifier.fillMaxWidth().semantics { testTag = WidgetTags.FOOTER },
         verticalAlignment = Alignment.CenterVertically,
@@ -746,21 +801,44 @@ private fun WidgetFooter(
             icon = if (showCompleted) R.drawable.ic_widget_eye_off else R.drawable.ic_widget_eye,
             label = if (showCompleted) "Hide completed tasks" else "Show completed tasks",
             action = actionRunCallback<ToggleShowCompletedAction>(params),
-            size = 34.dp,
-            iconScale = 0.5f,
+            size = FOOTER_BUTTON,
+            iconScale = 0.44f,
             tint = GlanceTheme.colors.onSurfaceVariant,
             testTag = WidgetTags.SHOW_COMPLETED,
             interactive = interactive,
         )
-        IconAction(
-            icon = R.drawable.ic_widget_broom,
-            label = "Clear ${list.doneCount} completed tasks",
-            action = actionRunCallback<ClearCompletedAction>(params),
-            size = 34.dp,
-            iconScale = 0.5f,
-            tint = GlanceTheme.colors.onSurfaceVariant,
-            testTag = WidgetTags.CLEAR_COMPLETED,
-            interactive = interactive,
+        // A list that resets every morning needs its ticked tasks back tomorrow; clearing them
+        // would delete the routine itself, so the broom is not offered there.
+        if (!list.resetsDaily) {
+            Spacer(GlanceModifier.width(6.dp))
+            IconAction(
+                icon = R.drawable.ic_widget_broom,
+                label = "Clear ${list.doneCount} completed tasks",
+                action = actionRunCallback<ClearCompletedAction>(params),
+                size = FOOTER_BUTTON,
+                iconScale = 0.44f,
+                tint = GlanceTheme.colors.onSurfaceVariant,
+                testTag = WidgetTags.CLEAR_COMPLETED,
+                interactive = interactive,
+            )
+        }
+    }
+}
+
+/** A word-sized button, for the two answers in the footer's "delete completed?" question. */
+@Composable
+private fun TextAction(label: String, color: ColorProvider, action: Action, interactive: Boolean) {
+    Box(
+        modifier = GlanceModifier
+            .height(FOOTER_BUTTON)
+            .padding(horizontal = 12.dp)
+            .clickableIf(interactive, action),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            maxLines = 1,
+            style = TextStyle(color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold),
         )
     }
 }

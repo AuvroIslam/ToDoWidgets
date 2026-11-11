@@ -13,6 +13,9 @@ object TodoLimits {
     const val LIST_NAME_MAX = 40
     const val MAX_LISTS = 100
     const val MAX_TASKS_PER_LIST = 1000
+
+    /** The most tasks one paste can create, so a stray page of text cannot flood a list. */
+    const val MAX_TASKS_PER_PASTE = 50
 }
 
 data class Task(
@@ -31,6 +34,10 @@ data class TodoList(
     val accent: Int = 0,
     val createdAt: Long = 0L,
     val tasks: List<Task> = emptyList(),
+    /** A routine: every morning its ticked tasks untick themselves. See [DailyReset]. */
+    val resetsDaily: Boolean = false,
+    /** The [DailyReset.dayOf] this list was last reset on (or switched to daily on). */
+    val lastResetDay: Long = 0L,
 ) {
     val activeTasks: List<Task> get() = tasks.filter { !it.isDone }
     val completedTasks: List<Task> get() = tasks.filter { it.isDone }

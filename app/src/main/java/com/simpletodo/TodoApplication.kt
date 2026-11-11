@@ -2,8 +2,10 @@ package com.simpletodo
 
 import android.app.Application
 import android.util.Log
+import com.simpletodo.widget.DailyResetRunner
 import com.simpletodo.widget.WidgetRenderer
 import com.simpletodo.widget.WidgetSync
+import com.simpletodo.widget.WorkManagerKeepAlive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 
@@ -14,6 +16,7 @@ class TodoApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         val container = AppGraph.get(this)
+        WorkManagerKeepAlive.ensure(this)
 
         container.appScope.launch {
             runCatching { container.repository.seedIfFirstRun() }
@@ -21,6 +24,7 @@ class TodoApplication : Application() {
             // onDeleted can be missed if the app was force-stopped or the launcher replaced, so
             // bindings for widgets the launcher no longer knows about are dropped on start-up.
             WidgetSync.reconcileBindings(this@TodoApplication)
+            DailyResetRunner.run(this@TodoApplication)
         }
 
         // Every write redraws the widgets, here and now (see WidgetRenderer for why not through

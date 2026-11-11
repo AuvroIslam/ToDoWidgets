@@ -51,6 +51,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.simpletodo.AppGraph
+import com.simpletodo.data.TaskLines
 import com.simpletodo.data.TodoList
 import com.simpletodo.ui.theme.SimpleTodoTheme
 import kotlinx.coroutines.delay
@@ -103,11 +104,17 @@ class QuickAddActivity : ComponentActivity() {
                     onSubmit = { text ->
                         val listId = activeListId ?: return@QuickAddSheet
                         lifecycleScope.launch {
-                            val id = repository.addTask(listId, text)
-                            if (id != null) {
+                            // A pasted list adds one task per line, here as in the app.
+                            val lines = TaskLines.parse(text)
+                            val added = when {
+                                lines.size > 1 -> repository.addTasks(listId, lines)
+                                repository.addTask(listId, text) != null -> 1
+                                else -> 0
+                            }
+                            if (added > 0) {
                                 view.confirmHaptic()
-                                addedCount += 1
-                                lastAdded = text.trim()
+                                addedCount += added
+                                lastAdded = lines.firstOrNull() ?: text.trim()
                                 // Let the confirmation land, then let the sheet slide away.
                                 delay(650)
                                 sheet.dismiss()
@@ -117,6 +124,11 @@ class QuickAddActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) redrawWidgetsAfterClose()
     }
 
     companion object {
@@ -197,16 +209,26 @@ private fun QuickAddSheet(
 
             Spacer(Modifier.height(4.dp))
 
+            val pastedLines = remember(text) { TaskLines.parse(text).size }
+            AnimatedVisibility(visible = pastedLines > 1) {
+                Text(
+                    text = "Adds $pastedLines tasks — one per line",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                )
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it.take(300) },
+                    onValueChange = { text = if ('\n' in it) it.take(6_000) else it.take(300) },
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester)
                         .testTag(QuickAddTags.FIELD),
                     placeholder = { Text("Add a task…") },
-                    singleLine = true,
+                    maxLines = 4,
                     enabled = activeList != null,
                     shape = RoundedCornerShape(16.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),

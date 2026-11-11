@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.simpletodo.AppGraph
+import com.simpletodo.data.DailyReset
 import com.simpletodo.data.Task
 import com.simpletodo.data.TodoList
 import com.simpletodo.data.TodoRepository
@@ -66,6 +67,11 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
         repository.setListAccent(listId, accent)
     }
 
+    fun setListDaily(listId: String, daily: Boolean, onDone: () -> Unit = {}) = viewModelScope.launch {
+        repository.setListDaily(listId, daily, DailyReset.dayOf(System.currentTimeMillis()))
+        onDone()
+    }
+
     fun deleteList(listId: String) = viewModelScope.launch {
         val current = repository.current()
         val index = current.lists.indexOfFirst { it.id == listId }
@@ -83,6 +89,11 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
 
     fun addTask(listId: String, title: String) = viewModelScope.launch {
         repository.addTask(listId, title)
+    }
+
+    /** Adds one task per entry (a pasted list) and reports how many actually went in. */
+    fun addTasks(listId: String, titles: List<String>, onAdded: (Int) -> Unit) = viewModelScope.launch {
+        onAdded(repository.addTasks(listId, titles))
     }
 
     fun toggleTask(listId: String, taskId: String) = viewModelScope.launch {

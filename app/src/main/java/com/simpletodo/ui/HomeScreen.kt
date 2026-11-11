@@ -1,6 +1,7 @@
 package com.simpletodo.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.AddLink
 import androidx.compose.material.icons.rounded.BrightnessAuto
 import androidx.compose.material.icons.rounded.Check
@@ -102,6 +104,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.simpletodo.R
 import com.simpletodo.data.Task
+import com.simpletodo.data.TaskLines
 import com.simpletodo.data.TaskLinks
 import com.simpletodo.data.ThemeMode
 import com.simpletodo.data.TodoLimits
@@ -109,6 +112,7 @@ import com.simpletodo.data.TodoList
 import com.simpletodo.data.TodoSnapshot
 import com.simpletodo.ui.theme.TodoAccents
 import com.simpletodo.ui.theme.accentTextColor
+import com.simpletodo.widget.DailyResetRunner
 import kotlinx.coroutines.launch
 
 /** A task together with the list it belongs to, which the "All" filter needs and a list view has. */
@@ -141,6 +145,9 @@ fun HomeScreen(
     var renaming by remember { mutableStateOf(false) }
     var accentPicking by remember { mutableStateOf(false) }
     var confirmDeleteList by remember { mutableStateOf(false) }
+    var confirmDaily by remember { mutableStateOf(false) }
+    // Where the composer adds to while "All" is showing; null means the first list.
+    var composeTargetId by remember { mutableStateOf<String?>(null) }
     var activeCollapsed by remember { mutableStateOf(false) }
     var completedCollapsed by remember { mutableStateOf(false) }
     var editingTaskId by remember(selected?.id) { mutableStateOf<String?>(null) }
@@ -221,21 +228,57 @@ fun HomeScreen(
                 onAddWidget = { selected?.let { onAddWidget(it.id) } },
                 onClearCompleted = { selected?.let { viewModel.clearCompleted(it.id) } },
                 onDeleteList = { confirmDeleteList = true },
+                onDaily = {
+                    val list = selected
+                    if (list != null) {
+                        if (!list.resetsDaily) {
+                            // Turning it on is explained first: tasks unticking themselves
+                            // overnight would look like a bug to anyone who had not been told.
+                            confirmDaily = true
+                        } else {
+                            viewModel.setListDaily(list.id, false)
+                            messages.launch {
+                                snackbarHostState.showSnackbar("“${list.name}” no longer resets every morning")
+                            }
+                        }
+                    }
+                },
                 themeMode = themeMode,
                 onTheme = onTheme,
                 hasCompleted = completed.isNotEmpty(),
             )
         },
         bottomBar = {
-            val target = selected ?: lists.firstOrNull()
+            val target = selected
+                ?: lists.firstOrNull { it.id == composeTargetId }
+                ?: lists.firstOrNull()
             if (target != null) {
                 Composer(
-                    // Naming the destination keeps "All" unambiguous: the task has to land
-                    // somewhere, and the user can see where before they type.
-                    placeholder = if (showListNames) "Add to ${target.name}" else "What's next?",
+                    placeholder = "What's next?",
                     accent = TodoAccents.colorAt(target.accent),
                     enabled = target.tasks.size < TodoLimits.MAX_TASKS_PER_LIST,
-                    onSubmit = { title -> viewModel.addTask(target.id, title) },
+                    // In "All" the task has to land in *some* list. Which one is shown above the
+                    // field, and can be changed there, rather than being a silent default.
+                    destination = target.takeIf { showListNames },
+                    destinations = lists,
+                    onDestination = { composeTargetId = it },
+                    onSubmit = { lines ->
+                        if (lines.size == 1) {
+                            viewModel.addTask(target.id, lines.first())
+                        } else {
+                            viewModel.addTasks(target.id, lines) { added ->
+                                messages.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (added == lines.size) {
+                                            "Added $added tasks to ${target.name}"
+                                        } else {
+                                            "Added $added of ${lines.size} — ${target.name} is full"
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    },
                 )
             }
         },
@@ -401,6 +444,24 @@ fun HomeScreen(
         )
     }
 
+    if (target != null && confirmDaily) {
+        ConfirmDialog(
+            title = "Reset “${target.name}” every morning?",
+            message = "Every morning at 4 am, the ticked tasks in this list untick themselves, " +
+                "ready to do again. Nothing is deleted.\n\nGood for routines, medicines and " +
+                "daily habits. You can turn it off any time from this menu.",
+            confirmLabel = "Turn on",
+            destructive = false,
+            onDismiss = { confirmDaily = false },
+            onConfirm = {
+                confirmDaily = false
+                viewModel.setListDaily(target.id, true) {
+                    messages.launch { DailyResetRunner.run(context) }
+                }
+            },
+        )
+    }
+
     if (target != null && accentPicking) {
         AccentPickerDialog(
             current = target.accent,
@@ -452,6 +513,7 @@ private fun HomeHeader(
     onAddWidget: () -> Unit,
     onClearCompleted: () -> Unit,
     onDeleteList: () -> Unit,
+    onDaily: () -> Unit,
     themeMode: ThemeMode,
     onTheme: () -> Unit,
 ) {
@@ -504,6 +566,19 @@ private fun HomeHeader(
                             text = { Text("Colour") },
                             leadingIcon = { Icon(Icons.Rounded.Palette, contentDescription = null) },
                             onClick = { menuOpen = false; onAccent() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Reset every morning") },
+                            leadingIcon = { Icon(Icons.Rounded.Autorenew, contentDescription = null) },
+                            // Its state is readable off the menu, like the theme below.
+                            trailingIcon = {
+                                Text(
+                                    text = if (selected.resetsDaily) "On" else "Off",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            onClick = { menuOpen = false; onDaily() },
                         )
                         DropdownMenuItem(
                             text = { Text("Add to home screen") },
@@ -580,6 +655,7 @@ private fun HomeHeader(
                 items(lists, key = { it.id }) { list ->
                     FilterPill(
                         label = list.name,
+                        daily = list.resetsDaily,
                         color = TodoAccents.colorAt(list.accent),
                         selected = list.id == selected?.id,
                         onClick = { onSelect(list.id) },
@@ -635,6 +711,27 @@ private fun HomeHeader(
             }
         }
 
+        // Says, on the list itself, why yesterday's ticks are gone this morning.
+        if (selected?.resetsDaily == true) {
+            Row(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Autorenew,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Resets every morning at 4 am",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Spacer(Modifier.height(10.dp))
     }
 }
@@ -647,6 +744,7 @@ private fun FilterPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     wash: Color? = null,
+    daily: Boolean = false,
 ) {
     // Unselected chips carry a wash of their own accent, so a list keeps its identity even when
     // it is not the one being looked at.
@@ -665,14 +763,28 @@ private fun FilterPill(
             .clickable(onClick = onClick, role = Role.Tab)
             .semantics { this.selected = selected },
     ) {
-        Text(
-            text = label,
+        val ink = if (selected) TodoAccents.onAccent else MaterialTheme.colorScheme.onSurface
+        Row(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 9.dp),
-            style = MaterialTheme.typography.titleSmall,
-            color = if (selected) TodoAccents.onAccent else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (daily) {
+                Icon(
+                    imageVector = Icons.Rounded.Autorenew,
+                    contentDescription = "Resets every morning",
+                    modifier = Modifier.size(15.dp),
+                    tint = ink,
+                )
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -1095,29 +1207,54 @@ private fun Composer(
     placeholder: String,
     accent: Color,
     enabled: Boolean,
-    onSubmit: (String) -> Unit,
+    destination: TodoList?,
+    destinations: List<TodoList>,
+    onDestination: (String) -> Unit,
+    onSubmit: (List<String>) -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
+    // A pasted list: every non-empty line becomes its own task.
+    val lines = remember(text) { TaskLines.parse(text) }
 
     fun submit() {
-        val value = text.trim()
-        if (value.isEmpty()) return
-        onSubmit(value)
+        if (lines.isEmpty()) return
+        onSubmit(lines)
         text = ""
     }
 
     Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .imePadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
+        if (destination != null) {
+            DestinationChip(destination, destinations, onDestination)
+            Spacer(Modifier.height(6.dp))
+        }
+        // Said *before* the send button is pressed, so one paste turning into several tasks is
+        // something the user was told, not something that happened to them.
+        AnimatedVisibility(visible = lines.size > 1) {
+            Text(
+                text = if (lines.size <= TodoLimits.MAX_TASKS_PER_PASTE) {
+                    "Adds ${lines.size} tasks — one per line"
+                } else {
+                    "Adds the first ${TodoLimits.MAX_TASKS_PER_PASTE} of ${lines.size} lines"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 12.dp, bottom = 6.dp).testTag(AppTags.PASTE_HINT),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = text,
-                onValueChange = { text = it.take(TodoLimits.TASK_TITLE_MAX) },
+                // A single task is capped at its title length; a pasted list is not one title.
+                onValueChange = {
+                    text = if ('\n' in it) it.take(PASTE_MAX_CHARS) else it.take(TodoLimits.TASK_TITLE_MAX)
+                },
                 modifier = Modifier.weight(1f).testTag(AppTags.TASK_INPUT),
                 enabled = enabled,
                 placeholder = {
@@ -1126,8 +1263,9 @@ private fun Composer(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 },
-                singleLine = true,
-                shape = CircleShape,
+                // Not singleLine: a pasted list has to be seen as the lines it is.
+                maxLines = 4,
+                shape = RoundedCornerShape(28.dp),
                 textStyle = MaterialTheme.typography.bodyLarge,
                 colors = pillFieldColors(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1145,6 +1283,66 @@ private fun Composer(
                 ),
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Add task")
+            }
+        }
+        }
+    }
+}
+
+private const val PASTE_MAX_CHARS = 6_000
+
+/** "Adding to ● Work ▾" above the composer in "All": shows the destination, and changes it. */
+@Composable
+private fun DestinationChip(
+    current: TodoList,
+    lists: List<TodoList>,
+    onPick: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .clickable(onClickLabel = "Change list", role = Role.Button) { open = true }
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 12.dp)
+                .testTag(AppTags.COMPOSE_TARGET),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Adding to",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(9.dp).clip(CircleShape).background(TodoAccents.colorAt(current.accent)))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = current.name,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Icon(
+                imageVector = Icons.Rounded.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            lists.forEach { list ->
+                DropdownMenuItem(
+                    text = { Text(list.name) },
+                    leadingIcon = {
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(TodoAccents.colorAt(list.accent)))
+                    },
+                    trailingIcon = {
+                        if (list.id == current.id) Icon(Icons.Rounded.Check, contentDescription = null)
+                    },
+                    onClick = { open = false; onPick(list.id) },
+                )
             }
         }
     }

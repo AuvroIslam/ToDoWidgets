@@ -31,8 +31,8 @@ android {
         targetSdk = 36
         // Play refuses a second upload at the same code, so any build meant to replace what is
         // already up there has to move past it.
-        versionCode = 6
-        versionName = "1.1.0"
+        versionCode = 7
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -128,6 +128,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // android.jar ships org.json as stubs for local unit tests; this is the real one, tests only.
+    testImplementation("org.json:json:20240303")
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)

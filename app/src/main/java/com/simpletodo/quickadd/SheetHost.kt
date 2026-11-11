@@ -47,6 +47,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.simpletodo.AppGraph
+import com.simpletodo.widget.WidgetRenderer
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The entrance and exit of one of the sheets that open over the home screen.
@@ -213,4 +217,20 @@ internal fun PoppingCheck(
                 scaleY = scale.value
             },
     )
+}
+
+/**
+ * Draws every widget again once a sheet has closed, whether or not anything changed.
+ *
+ * While a sheet is up the launcher sits behind it, and an update that arrives then is applied to a
+ * home screen nobody can see. Once, on a Samsung launcher, such an update was applied as an empty
+ * frame and the widget stayed blank until its next change. Rather than trust every launcher to
+ * get that right, the widgets are redrawn at the moment the user is looking at them again.
+ */
+internal fun Activity.redrawWidgetsAfterClose() {
+    val appContext = applicationContext
+    AppGraph.get(appContext).appScope.launch {
+        delay(350)
+        runCatching { WidgetRenderer.renderAll(appContext, force = true) }
+    }
 }

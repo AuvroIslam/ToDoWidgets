@@ -10,7 +10,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.simpletodo.widget.DailyResetRunner
+import kotlinx.coroutines.launch
 import com.simpletodo.ui.theme.SimpleTodoTheme
 
 class MainActivity : ComponentActivity() {
@@ -39,6 +42,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** An app left open overnight must not greet the morning with yesterday's ticks. */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch { DailyResetRunner.run(applicationContext) }
     }
 
     override fun onNewIntent(intent: Intent) {

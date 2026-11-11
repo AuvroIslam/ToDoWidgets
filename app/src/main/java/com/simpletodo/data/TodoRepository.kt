@@ -77,6 +77,42 @@ class TodoRepository(
     }
 
     /**
+     * Turns the morning reset on or off. Turning it on never unticks anything there and then: the
+     * list is stamped with [today], so its first reset is tomorrow morning's.
+     */
+    suspend fun setListDaily(listId: String, daily: Boolean, today: Long) = mutate { current ->
+        current.mapList(listId) { it.copy(resetsDaily = daily, lastResetDay = if (daily) today else 0L) }
+    }
+
+    /**
+     * Unticks every task in each daily list that has not been reset yet on [today]. Nothing is
+     * deleted or reordered. Safe to call as often as anything likes: once a list carries today's
+     * stamp it is left alone.
+     *
+     * @return true when at least one list was reset.
+     */
+    suspend fun resetDailyLists(today: Long): Boolean {
+        var reset = false
+        mutate { current ->
+            if (current.lists.none { it.resetsDaily && it.lastResetDay < today }) return@mutate current
+            reset = true
+            current.copy(
+                lists = current.lists.map { list ->
+                    if (!list.resetsDaily || list.lastResetDay >= today) {
+                        list
+                    } else {
+                        list.copy(
+                            lastResetDay = today,
+                            tasks = list.tasks.map { it.copy(isDone = false, completedAt = null) },
+                        )
+                    }
+                },
+            )
+        }
+        return reset
+    }
+
+    /**
      * Deletes a list and unbinds every widget that pointed at it, in the same atomic write, so a
      * widget can never end up rendering a list that is half-deleted.
      */
@@ -128,6 +164,31 @@ class TodoRepository(
         return created
     }
 
+    /**
+     * Adds several tasks in one write — a pasted shopping list, one task per line. They keep the
+     * order they were written in, first line on top, above what was already in the list.
+     *
+     * @return how many were added; fewer than given when the list (or the per-paste cap) filled up.
+     */
+    suspend fun addTasks(listId: String, titles: List<String>): Int {
+        val parsed = titles.map { TaskLinks.split(it) }.filter { it.first.isNotEmpty() }
+            .take(TodoLimits.MAX_TASKS_PER_PASTE)
+        if (parsed.isEmpty()) return 0
+        var added = 0
+        mutate { current ->
+            val list = current.listById(listId) ?: return@mutate current
+            val room = TodoLimits.MAX_TASKS_PER_LIST - list.tasks.size
+            if (room <= 0) return@mutate current
+            val created = now()
+            val tasks = parsed.take(room).map { (title, link) ->
+                Task(id = newId(), title = title, createdAt = created, url = link)
+            }
+            added = tasks.size
+            current.mapList(listId) { it.copy(tasks = tasks + it.tasks) }
+        }
+        return added
+    }
+
     /** Retitles a task. A link pasted into a task that has none becomes its link. */
     suspend fun editTask(listId: String, taskId: String, title: String) = mutate { current ->
         current.mapTask(listId, taskId) { task ->
@@ -164,14 +225,23 @@ class TodoRepository(
     /**
      * Flips the task's state. Toggling by current value (rather than sending an absolute value
      * from the widget) keeps two widgets showing the same list from fighting each other.
+     *
+     * @return whether the task is done *after* the flip, or null when it no longer exists. Callers
+     *   must use this rather than guessing from an earlier read: two quick taps race, and only the
+     *   write itself knows which way each one went.
      */
-    suspend fun toggleTask(listId: String, taskId: String) = mutate { current ->
-        current.mapTask(listId, taskId) { task ->
-            task.copy(
-                isDone = !task.isDone,
-                completedAt = if (!task.isDone) now() else null,
-            )
+    suspend fun toggleTask(listId: String, taskId: String): Boolean? {
+        var result: Boolean? = null
+        mutate { current ->
+            current.mapTask(listId, taskId) { task ->
+                result = !task.isDone
+                task.copy(
+                    isDone = !task.isDone,
+                    completedAt = if (!task.isDone) now() else null,
+                )
+            }
         }
+        return result
     }
 
     suspend fun deleteTask(listId: String, taskId: String) = mutate { current ->

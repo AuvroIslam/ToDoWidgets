@@ -6,6 +6,8 @@
     <string name="widget_large_label">TodoWidget · Large</string>
     <string name="widget_xlarge_label">TodoWidget · Extra large</string>
 
+    <string name="widget_initial_hint">Loading your list…</string>
+
     <string name="widget_small_description">What\'s next from one list, with a tap to tick it off.</string>
     <string name="widget_medium_description">Several tasks: tick, quick add, and a ⋮ menu on each.</string>
     <string name="widget_large_description">Scrollable list with ticking, a ⋮ menu per task, add and list controls.</string>

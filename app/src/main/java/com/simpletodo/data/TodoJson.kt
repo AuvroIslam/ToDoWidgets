@@ -25,6 +25,8 @@ object TodoJson {
     private const val KEY_ACCENT = "accent"
     private const val KEY_CREATED = "createdAt"
     private const val KEY_TASKS = "tasks"
+    private const val KEY_DAILY = "daily"
+    private const val KEY_RESET_DAY = "resetDay"
 
     private const val KEY_TITLE = "title"
     private const val KEY_DONE = "done"
@@ -43,6 +45,10 @@ object TodoJson {
             listObj.put(KEY_NAME, list.name)
             listObj.put(KEY_ACCENT, list.accent)
             listObj.put(KEY_CREATED, list.createdAt)
+            if (list.resetsDaily) {
+                listObj.put(KEY_DAILY, true)
+                listObj.put(KEY_RESET_DAY, list.lastResetDay)
+            }
 
             val tasks = JSONArray()
             for (task in list.tasks) {
@@ -117,6 +123,8 @@ object TodoJson {
                 accent = listObj.optInt(KEY_ACCENT, 0).mod(ACCENT_COUNT),
                 createdAt = listObj.optLong(KEY_CREATED, 0L),
                 tasks = tasks,
+                resetsDaily = listObj.optBoolean(KEY_DAILY, false),
+                lastResetDay = listObj.optLong(KEY_RESET_DAY, 0L),
             )
             if (lists.size >= TodoLimits.MAX_LISTS) break
         }

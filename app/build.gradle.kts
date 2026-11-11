@@ -31,8 +31,8 @@ android {
         targetSdk = 36
         // Play refuses a second upload at the same code, so any build meant to replace what is
         // already up there has to move past it.
-        versionCode = 7
-        versionName = "1.2.0"
+        versionCode = 8
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }

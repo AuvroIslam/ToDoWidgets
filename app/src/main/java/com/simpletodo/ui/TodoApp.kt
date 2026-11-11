@@ -33,7 +33,6 @@ object AppTags {
     const val NEW_LIST = "new_list"
     const val TASK_INPUT = "task_input"
     const val TASK_SUBMIT = "task_submit"
-    const val PASTE_HINT = "paste_hint"
     const val COMPOSE_TARGET = "compose_target"
     const val EMPTY_LISTS = "empty_lists"
     const val EMPTY_TASKS = "empty_tasks"

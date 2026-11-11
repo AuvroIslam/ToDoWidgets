@@ -13,9 +13,6 @@ object TodoLimits {
     const val LIST_NAME_MAX = 40
     const val MAX_LISTS = 100
     const val MAX_TASKS_PER_LIST = 1000
-
-    /** The most tasks one paste can create, so a stray page of text cannot flood a list. */
-    const val MAX_TASKS_PER_PASTE = 50
 }
 
 data class Task(

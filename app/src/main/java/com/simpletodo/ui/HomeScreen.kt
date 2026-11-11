@@ -1,7 +1,6 @@
 package com.simpletodo.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -51,6 +50,7 @@ import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -103,8 +103,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.simpletodo.R
+import com.simpletodo.data.ListText
 import com.simpletodo.data.Task
-import com.simpletodo.data.TaskLines
 import com.simpletodo.data.TaskLinks
 import com.simpletodo.data.ThemeMode
 import com.simpletodo.data.TodoLimits
@@ -228,6 +228,13 @@ fun HomeScreen(
                 onAddWidget = { selected?.let { onAddWidget(it.id) } },
                 onClearCompleted = { selected?.let { viewModel.clearCompleted(it.id) } },
                 onDeleteList = { confirmDeleteList = true },
+                onShare = {
+                    selected?.let { list ->
+                        if (!shareText(context, ListText.format(list))) {
+                            messages.launch { snackbarHostState.showSnackbar("No app on this phone can share text") }
+                        }
+                    }
+                },
                 onDaily = {
                     val list = selected
                     if (list != null) {
@@ -262,23 +269,7 @@ fun HomeScreen(
                     destination = target.takeIf { showListNames },
                     destinations = lists,
                     onDestination = { composeTargetId = it },
-                    onSubmit = { lines ->
-                        if (lines.size == 1) {
-                            viewModel.addTask(target.id, lines.first())
-                        } else {
-                            viewModel.addTasks(target.id, lines) { added ->
-                                messages.launch {
-                                    snackbarHostState.showSnackbar(
-                                        if (added == lines.size) {
-                                            "Added $added tasks to ${target.name}"
-                                        } else {
-                                            "Added $added of ${lines.size} — ${target.name} is full"
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    },
+                    onSubmit = { title -> viewModel.addTask(target.id, title) },
                 )
             }
         },
@@ -514,6 +505,7 @@ private fun HomeHeader(
     onClearCompleted: () -> Unit,
     onDeleteList: () -> Unit,
     onDaily: () -> Unit,
+    onShare: () -> Unit,
     themeMode: ThemeMode,
     onTheme: () -> Unit,
 ) {
@@ -580,6 +572,14 @@ private fun HomeHeader(
                             },
                             onClick = { menuOpen = false; onDaily() },
                         )
+                        // Nothing to send from an empty list, so the item is not offered there.
+                        if (!selected.isEmpty) {
+                            DropdownMenuItem(
+                                text = { Text("Share list") },
+                                leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
+                                onClick = { menuOpen = false; onShare() },
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Add to home screen") },
                             leadingIcon = { Icon(Icons.Rounded.Widgets, contentDescription = null) },
@@ -1210,15 +1210,14 @@ private fun Composer(
     destination: TodoList?,
     destinations: List<TodoList>,
     onDestination: (String) -> Unit,
-    onSubmit: (List<String>) -> Unit,
+    onSubmit: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
-    // A pasted list: every non-empty line becomes its own task.
-    val lines = remember(text) { TaskLines.parse(text) }
 
     fun submit() {
-        if (lines.isEmpty()) return
-        onSubmit(lines)
+        val value = text.trim()
+        if (value.isEmpty()) return
+        onSubmit(value)
         text = ""
     }
 
@@ -1234,27 +1233,10 @@ private fun Composer(
             DestinationChip(destination, destinations, onDestination)
             Spacer(Modifier.height(6.dp))
         }
-        // Said *before* the send button is pressed, so one paste turning into several tasks is
-        // something the user was told, not something that happened to them.
-        AnimatedVisibility(visible = lines.size > 1) {
-            Text(
-                text = if (lines.size <= TodoLimits.MAX_TASKS_PER_PASTE) {
-                    "Adds ${lines.size} tasks — one per line"
-                } else {
-                    "Adds the first ${TodoLimits.MAX_TASKS_PER_PASTE} of ${lines.size} lines"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 12.dp, bottom = 6.dp).testTag(AppTags.PASTE_HINT),
-            )
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextField(
                 value = text,
-                // A single task is capped at its title length; a pasted list is not one title.
-                onValueChange = {
-                    text = if ('\n' in it) it.take(PASTE_MAX_CHARS) else it.take(TodoLimits.TASK_TITLE_MAX)
-                },
+                onValueChange = { text = it.take(TodoLimits.TASK_TITLE_MAX) },
                 modifier = Modifier.weight(1f).testTag(AppTags.TASK_INPUT),
                 enabled = enabled,
                 placeholder = {
@@ -1263,9 +1245,8 @@ private fun Composer(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                 },
-                // Not singleLine: a pasted list has to be seen as the lines it is.
-                maxLines = 4,
-                shape = RoundedCornerShape(28.dp),
+                singleLine = true,
+                shape = CircleShape,
                 textStyle = MaterialTheme.typography.bodyLarge,
                 colors = pillFieldColors(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -1288,8 +1269,6 @@ private fun Composer(
         }
     }
 }
-
-private const val PASTE_MAX_CHARS = 6_000
 
 /** "Adding to ● Work ▾" above the composer in "All": shows the destination, and changes it. */
 @Composable

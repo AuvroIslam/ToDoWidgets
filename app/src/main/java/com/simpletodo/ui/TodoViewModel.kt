@@ -91,11 +91,6 @@ class TodoViewModel(private val repository: TodoRepository) : ViewModel() {
         repository.addTask(listId, title)
     }
 
-    /** Adds one task per entry (a pasted list) and reports how many actually went in. */
-    fun addTasks(listId: String, titles: List<String>, onAdded: (Int) -> Unit) = viewModelScope.launch {
-        onAdded(repository.addTasks(listId, titles))
-    }
-
     fun toggleTask(listId: String, taskId: String) = viewModelScope.launch {
         repository.toggleTask(listId, taskId)
     }

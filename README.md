@@ -65,7 +65,7 @@ I kept installing to-do apps and kept uninstalling them for the same three reaso
 - **Multiple lists**, each with its own colour.
 - **Edit, copy or add a link** from any task's ⋮ menu.
 - **Lists that reset every morning.** Switch it on for a routine — medicines, habits, a morning checklist — and its ticked tasks untick themselves overnight. Nothing is deleted.
-- **Paste a list, get a task per line.** A shopping list copied from a chat becomes separate tasks, and the app says so before you send.
+- **Share a list as text.** One tap sends "Shopping • Milk • Eggs…" to WhatsApp, Messages or anywhere else.
 - **Drag to reorder**, **undo** any delete.
 - **Light / Dark / System**, in the ⋮ menu.
 - No accounts, no onboarding, no sync setup.

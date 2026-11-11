@@ -21,6 +21,19 @@ fun copyToClipboard(context: Context, text: String): Boolean {
 }
 
 /**
+ * Hands [text] to the system share sheet — WhatsApp, Messages, email, whatever the user picks.
+ *
+ * @return false when nothing on the device can take it.
+ */
+fun shareText(context: Context, text: String): Boolean = try {
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    context.startActivity(Intent.createChooser(send, null))
+    true
+} catch (_: ActivityNotFoundException) {
+    false
+}
+
+/**
  * Opens [url] in whatever the user has for it — the YouTube app for a YouTube link, a browser
  * otherwise.
  *

@@ -164,31 +164,6 @@ class TodoRepository(
         return created
     }
 
-    /**
-     * Adds several tasks in one write — a pasted shopping list, one task per line. They keep the
-     * order they were written in, first line on top, above what was already in the list.
-     *
-     * @return how many were added; fewer than given when the list (or the per-paste cap) filled up.
-     */
-    suspend fun addTasks(listId: String, titles: List<String>): Int {
-        val parsed = titles.map { TaskLinks.split(it) }.filter { it.first.isNotEmpty() }
-            .take(TodoLimits.MAX_TASKS_PER_PASTE)
-        if (parsed.isEmpty()) return 0
-        var added = 0
-        mutate { current ->
-            val list = current.listById(listId) ?: return@mutate current
-            val room = TodoLimits.MAX_TASKS_PER_LIST - list.tasks.size
-            if (room <= 0) return@mutate current
-            val created = now()
-            val tasks = parsed.take(room).map { (title, link) ->
-                Task(id = newId(), title = title, createdAt = created, url = link)
-            }
-            added = tasks.size
-            current.mapList(listId) { it.copy(tasks = tasks + it.tasks) }
-        }
-        return added
-    }
-
     /** Retitles a task. A link pasted into a task that has none becomes its link. */
     suspend fun editTask(listId: String, taskId: String, title: String) = mutate { current ->
         current.mapTask(listId, taskId) { task ->

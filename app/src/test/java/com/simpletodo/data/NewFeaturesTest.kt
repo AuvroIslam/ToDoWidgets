@@ -35,37 +35,24 @@ class NewFeaturesTest {
     private fun at(day: Int, hour: Int, minute: Int = 0): Long =
         LocalDateTime.of(2026, 11, day, hour, minute).atZone(zone).toInstant().toEpochMilli()
 
-    // ------------------------------------------------------------ pasted lists
+    // ------------------------------------------------------- share as text
 
     @Test
-    fun pastedListBecomesOneTaskPerLineWithoutItsBullets() {
-        assertEquals(
-            listOf("Milk", "Eggs", "Bread", "Call mom", "Done item"),
-            TaskLines.parse("- Milk\n• Eggs\n\n3. Bread\r\n[ ] Call mom\n[x] Done item\n   "),
+    fun sharedListIsItsNameThenOpenTasksThenDoneOnes() {
+        val list = TodoList(
+            id = "l",
+            name = "Shopping",
+            tasks = listOf(
+                Task("a", "Milk"),
+                Task("b", "Bread", isDone = true, completedAt = 1L),
+                Task("c", "Recipe", url = "https://example.com/r"),
+                Task("d", "example.com/x", url = "https://example.com/x"),
+            ),
         )
-    }
-
-    @Test
-    fun ordinaryTextIsStillOneTask() {
-        assertEquals(listOf("Buy milk - the oat one"), TaskLines.parse("  Buy milk - the oat one "))
-        assertFalse(TaskLines.isSeveral("Buy milk"))
-        assertTrue(TaskLines.isSeveral("Milk\nEggs"))
-    }
-
-    @Test
-    fun addTasksKeepsPastedOrderAboveExistingTasks() = runTest {
-        val repo = repository(TodoList(id = "l", name = "Shop", tasks = listOf(Task("old", "Old"))))
-        assertEquals(3, repo.addTasks("l", listOf("Milk", "Eggs https://example.com/eggs", "Bread")))
-        val tasks = repo.current().listById("l")!!.tasks
-        assertEquals(listOf("Milk", "Eggs", "Bread", "Old"), tasks.map { it.title })
-        assertEquals("https://example.com/eggs", tasks[1].url)
-    }
-
-    @Test
-    fun addTasksStopsAtThePasteCap() = runTest {
-        val repo = repository(TodoList(id = "l", name = "Shop"))
-        val added = repo.addTasks("l", (1..80).map { "Item $it" })
-        assertEquals(TodoLimits.MAX_TASKS_PER_PASTE, added)
+        assertEquals(
+            "Shopping\n• Milk\n• Recipe — https://example.com/r\n• example.com/x — https://example.com/x\n✓ Bread",
+            ListText.format(list),
+        )
     }
 
     // ------------------------------------------------------------- toggle

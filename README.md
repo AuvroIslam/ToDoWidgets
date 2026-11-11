@@ -17,7 +17,7 @@ Add, tick, edit and delete — without ever opening the app.
 
 <br />
 
-<a href="https://drive.google.com/file/d/145odBPue3BfFwgNlh3YM-xRWK604xYOK/view?usp=sharing">
+<a href="https://github.com/AuvroIslam/ToDoWidgets/releases/latest">
   <img src="https://img.shields.io/badge/Download%20the%20APK-FCBA15?style=for-the-badge&logo=android&logoColor=black&labelColor=1A1A1A" alt="Download the APK" />
 </a>
 
